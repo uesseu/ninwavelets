@@ -1,7 +1,10 @@
 from .base import WaveletBase, WaveletMode
 from typing import Union, List
 import numpy as np
-import cupy as cp
+try:
+    import cupy as cp
+except:
+    cp = np
 
 
 class Morse(WaveletBase):
