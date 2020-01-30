@@ -1,12 +1,16 @@
 import numpy as np
-import cupy as cp
 import matplotlib.pyplot as plt
 from scipy.fftpack import ifft, fft
 from typing import Union, List, Iterator, Callable, Tuple
 from enum import Enum
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from functools import partial
+from functools import partial, reduce
+from operator import mul
 
+try:
+    import cupy as cp
+except:
+    cp = np
 
 Numbers = Union[List[float], np.ndarray, range]
 Array = Union[np.ndarray, cp.ndarray]
@@ -15,8 +19,7 @@ Floats = Union[None, Tuple[float, float]]
 MNE_CONSTANT = np.sqrt(2)
 
 
-def baseline_of(wave: Array, sfreq: float,
-                start: float, stop: float) -> Array:
+def baseline_of(wave: Array, sfreq: float, start: float, stop: float) -> Array:
     return wave[int(start * sfreq): int(stop * sfreq)]
 
 
@@ -39,15 +42,17 @@ class Baseline:
     - mean: subtraction
     - ratio: division
     - percent: division after subtraction
-    - log: log10 after division
+    - log: log after division
     - zscore: standize after subtraction
-    - zlog: log10 after zscore
+    - zlog: log after zscore
     '''
     def __init__(self, wave: Array, sfreq: float,
-                 start: float, stop: float) -> None:
+                 start: float, stop: float, dim: int = 1) -> None:
         self.wave = wave
-        self.baseline = wave[int(start * sfreq): int(stop * sfreq)]
-        self.basemean = self.baseline.mean()
+        shape = reduce(mul, wave.shape)
+        self.baseline = wave.reshape(shape)[int(start * sfreq):
+                                            int(stop * sfreq)]
+        self.basemean = self.baseline.mean(axis=-1)
 
     def mean(self) -> Array:
         return self.wave - self.basemean
@@ -59,7 +64,7 @@ class Baseline:
         return self.mean() / self.basemean
 
     def log(self) -> Array:
-        return np.log10(self.ratio())
+        return np.log(self.ratio())
 
     def zscore(self) -> Array:
         return self.mean() / np.std(self.baseline)
@@ -104,8 +109,7 @@ def normalize(wave: np.ndarray, length: float,
     return wave * length / np.linalg.norm(wave)
 
 
-def interpolate_alias(wave: Union[cp.ndarray, np.ndarray],
-                      cuda: bool = False) -> np.ndarray:
+def interpolate_alias(wave: Array, cuda: bool = False) -> np.ndarray:
     '''
     Interpolate data over nyquist frequency.
 
@@ -238,8 +242,10 @@ class WaveletBase:
         if self.mode in [WaveletMode.Reverse, WaveletMode.Both]:
             if self.interpolate:
                 t = self._setup_trans_shape(real_length,
-                                            real_length / 2, self.cuda)
-                result = hstack((formula(t, freq), np.zeros(len(t))))
+                                            real_length / 2,
+                                            self.cuda)
+                result = hstack((formula(t, freq),
+                                 np.zeros(len(t))))
             else:
                 t = self._setup_trans_shape(real_length,
                                             real_length, self.cuda)
