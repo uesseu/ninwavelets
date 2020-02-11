@@ -140,8 +140,7 @@ from ninwavelets import Morse
 ```python
 Morse(self, sfreq: float = 1000,
       b: float = 17.5, r: float = 3,
-      length: float = 10,
-      interpolate=False, cuda: bool = False) -> None:
+      length: float = 10, cuda: bool = False) -> None:
 ```
 
 Parameters
@@ -152,15 +151,12 @@ Parameters
 | b           | float | 17.5    | beta value                                                   |
 | r           | float | 3       | gamma value. 3 may be good value.                            |
 | length      | float | 10      | Length paramater. It affects only when you plot wavelets.    |
-| interpolate | bool  | False   | Interpolate frequencies which is higher than nyquist freq.   |
 | cuda        | bool  | False   | Use cuda or not. See 'Performance of wavelet transform'.     |
 
 ```python
 morse = Morse()
 ```
 
-interpolate=True makes your code faster.  
-(Up to half time)  
 But, I dont know whether it is good or bad...  
 
 This is an example.  
@@ -393,10 +389,8 @@ class Morlet(WaveletBase):
 
     def __init__(self, sfreq: float = 1000, sigma: float = 7.,
                  real_wave_length: float = 1.,
-                 gabor: bool = False, interpolate: bool = False,
-                 cuda: bool = False) -> None:
-        super(Morlet, self).__init__(sfreq, real_wave_length,
-                                     interpolate, cuda)
+                 gabor: bool = False, cuda: bool = False) -> None:
+        super(Morlet, self).__init__(sfreq, real_wave_length, cuda)
         self.mode = WaveletMode.Both
         self.sigma = sigma
         self.c = np.float_power(1 +
