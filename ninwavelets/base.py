@@ -109,24 +109,6 @@ def normalize(wave: np.ndarray, length: float,
     return wave * length / np.linalg.norm(wave)
 
 
-def interpolate_alias(wave: Array, cuda: bool = False) -> np.ndarray:
-    '''
-    Interpolate data over nyquist frequency.
-
-    Parameters
-    ----------
-    wave: np.ndarray[np.complex128, ndim=1]
-        Wave to interpolate.
-
-    Returns
-    -------
-    np.ndarray[np.complex128, ndim=1]: Interpolated wave.
-    '''
-    half: int = int(wave.shape[0] / 2)
-    pad: Callable = cp.pad if cuda else np.pad
-    return pad(wave[:half], [0, wave.shape[0] - half], 'constant')
-
-
 class WaveletMode(Enum):
     '''
     Modes of Wavelets.
@@ -155,7 +137,7 @@ class WaveletBase:
     '''
 
     def __init__(self, sfreq: float = 1000, real_wave_length: float = 1.,
-                 interpolate: bool = True, cuda: bool = False) -> None:
+                 cuda: bool = False) -> None:
         '''
         Parameters
         ----------
@@ -171,7 +153,6 @@ class WaveletBase:
         self.real_wave_length: float = real_wave_length
         # Distance between freqs(cwt)
         self.freq_dist: float
-        self.interpolate = interpolate
         self.cuda = cuda
 
     def _setup_trans_shape(self, freq: float, real_wave_length: float,
@@ -237,19 +218,11 @@ class WaveletBase:
         '''
         if freq == 0:
             raise ZeroDivisionError
-        hstack = cp.hstack if self.cuda else np.hstack
         formula = self.cp_trans_formula if self.cuda else self.trans_formula
         if self.mode in [WaveletMode.Reverse, WaveletMode.Both]:
-            if self.interpolate:
-                t = self._setup_trans_shape(real_length,
-                                            real_length / 2,
-                                            self.cuda)
-                result = hstack((formula(t, freq),
-                                 np.zeros(len(t))))
-            else:
-                t = self._setup_trans_shape(real_length,
-                                            real_length, self.cuda)
-                result = formula(t, freq)
+            t = self._setup_trans_shape(real_length,
+                                        real_length, self.cuda)
+            result = formula(t, freq)
             result = cp.asnumpy(result) if self.cuda else result
             return result
         else:
@@ -277,11 +250,7 @@ class WaveletBase:
         '''
         self.freq_dist = freqs[1] - freqs[0]
         make_w = partial(self.make_fft_wavelet, real_length=real_wave_length)
-        if self.interpolate:
-            fft_wavelets = map(make_w, freqs)
-            self.fft_wavelets = list(map(interpolate_alias, fft_wavelets))
-        else:
-            self.fft_wavelets = list(map(make_w, freqs))
+        self.fft_wavelets = list(map(make_w, freqs))
         return self.fft_wavelets
 
     def formula(self, timeline: np.ndarray, freq: float) -> np.ndarray:
@@ -403,8 +372,6 @@ class WaveletBase:
         wavelet = list(map(pad_wave, self.fft_wavelets))
         wavelet = cp.asarray(wavelet) if self.cuda else np.array(wavelet)
         fft_wave = cp.fft.fft(cp.asarray(wave)) if self.cuda else fft(wave)
-        if self.interpolate:
-            fft_wave = interpolate_alias(fft_wave, cuda=self.cuda)
         # Keep powerful even if long wave.
         if self.cuda:
             result = cp.asnumpy(cp.fft.ifft(wavelet * fft_wave))

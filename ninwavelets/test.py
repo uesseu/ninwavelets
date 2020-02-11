@@ -6,7 +6,6 @@ from multiprocessing import Pool
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft, ifft
 from mne.time_frequency.tfr import morlet, cwt
-from ninwavelets.base import interpolate_alias
 from ninwavelets import (Morse, MorseMNE, Morlet, WaveletMode,
                          Haar, plot_tf, MexicanHat, Shannon, Baseline)
 from mne.io import Raw
@@ -92,14 +91,14 @@ def plot_sin_fft() -> None:
     plt.show()
 
 
-def cwt_test(interpolate: bool = True, cuda: bool = False) -> None:
+def cwt_test(cuda: bool = False) -> None:
     sin = make_example(1)
     ax1 = plt.subplot(3, 1, 1)
     ax2 = plt.subplot(3, 1, 2)
     ax3 = plt.subplot(3, 1, 3)
 
-    morse = Morse(interpolate=interpolate, cuda=cuda)
-    nin_morlet = Morlet(interpolate=interpolate, cuda=cuda, sfreq=1000)
+    morse = Morse(cuda=cuda)
+    nin_morlet = Morlet(cuda=cuda, sfreq=1000)
     nin_morlet.mode = WaveletMode.Both
 
     result_morse = morse.abs(sin, range(1, 1000))
@@ -192,7 +191,6 @@ if __name__ == '__main__':
     # plot_sin_fft()
     # test()
     cuda = True if 'cuda' in argv else False
-    interpolate = True if 'interpolate' in argv else False
     if 'sin' in argv:
         plot_sin_fft()
     if 'wave' in argv:
@@ -200,6 +198,6 @@ if __name__ == '__main__':
         fft_wavelet_test()
         other_wavelet_test()
     if 'cwt' in argv:
-        cwt_test(interpolate, cuda)
+        cwt_test(cuda)
     if 'eeg' in argv:
         eeg(cuda)

@@ -39,10 +39,8 @@ class Morse(WaveletBase):
     '''
 
     def __init__(self, sfreq: float = 1000, b: float = 17.5, r: float = 3,
-                 real_wave_length: float = 1.,
-                 interpolate: bool = False, cuda: bool = False) -> None:
-        super(Morse, self).__init__(sfreq, real_wave_length,
-                                    interpolate, cuda)
+                 real_wave_length: float = 1., cuda: bool = False) -> None:
+        super(Morse, self).__init__(sfreq, real_wave_length, cuda)
         self.r: float = r
         self.b: float = b
         self.mode = WaveletMode.Reverse
@@ -112,10 +110,8 @@ class Morlet(WaveletBase):
 
     def __init__(self, sfreq: float = 1000, sigma: float = 7.,
                  real_wave_length: float = 1.,
-                 gabor: bool = False, interpolate: bool = False,
-                 cuda: bool = False) -> None:
-        super(Morlet, self).__init__(sfreq, real_wave_length,
-                                     interpolate, cuda)
+                 gabor: bool = False, cuda: bool = False) -> None:
+        super(Morlet, self).__init__(sfreq, real_wave_length, cuda)
         self.mode = WaveletMode.Both
         self.sigma = sigma
         self.c = np.float_power(1
@@ -156,10 +152,8 @@ class MorseMNE(Morse):
     '''
 
     def __init__(self, sfreq: float = 1000, b: float = 17.5, r: float = 3,
-                 real_wave_length: float = 1.,
-                 interpolate: bool = False, cuda: bool = False) -> None:
-        super(MorseMNE, self).__init__(sfreq, real_wave_length,
-                                       interpolate, cuda)
+                 real_wave_length: float = 1., cuda: bool = False) -> None:
+        super(MorseMNE, self).__init__(sfreq, real_wave_length, cuda)
         self.r: float = r
         self.b: float = b
         self.mode = WaveletMode.Reverse
@@ -211,10 +205,8 @@ class MexicanHat(WaveletBase):
     '''
 
     def __init__(self, sfreq: float = 1000, sigma: float = 7,
-                 real_wave_length: float = 1.,
-                 interpolate: bool = False, cuda: bool = False) -> None:
-        super(MexicanHat, self).__init__(sfreq, real_wave_length,
-                                         interpolate, cuda)
+                 real_wave_length: float = 1., cuda: bool = False) -> None:
+        super(MexicanHat, self).__init__(sfreq, real_wave_length, cuda)
         self.sigma: float = sigma
         self.mode = WaveletMode.Normal
         self.help = ''
@@ -248,10 +240,8 @@ class Shannon(WaveletBase):
     '''
 
     def __init__(self, sfreq: float = 1000, sigma: float = 7,
-                 real_wave_length: float = 1.,
-                 interpolate: bool = False, cuda: bool = False) -> None:
-        super(Shannon, self).__init__(sfreq, real_wave_length,
-                                      interpolate, cuda)
+                 real_wave_length: float = 1., cuda: bool = False) -> None:
+        super(Shannon, self).__init__(sfreq, real_wave_length, cuda)
         self.sigma: float = sigma
         self.mode = WaveletMode.Reverse
         self.help = ''
@@ -267,9 +257,8 @@ class Shannon(WaveletBase):
 
 class Haar(WaveletBase):
     def __init__(self, sfreq: float = 1000,
-                 real_wave_length: float = 1.,
-                 interpolate: bool = False) -> None:
-        super(Haar, self).__init__(sfreq, real_wave_length, interpolate)
+                 real_wave_length: float = 1.) -> None:
+        super(Haar, self).__init__(sfreq, real_wave_length)
         self.mode = WaveletMode.Normal
 
     def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
