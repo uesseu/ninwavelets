@@ -9,7 +9,9 @@ from operator import mul
 
 try:
     import cupy as cp
-except:
+except ImportError as error:
+    print(error)
+    print('Cupy could not be loaded.')
     cp = np
 
 Numbers = Union[List[float], np.ndarray, range]
@@ -333,7 +335,7 @@ class WaveletBase:
             wavelet = self.formula(timeline, freq)
         return wavelet
 
-    def make_wavelets(self,  freqs: Numbers) -> np.ndarray:
+    def make_wavelets(self, freqs: Numbers) -> np.ndarray:
         '''
         Make wavelets.
         It returnes list of wavelet, and it is compatible with mne-python.
@@ -347,7 +349,8 @@ class WaveletBase:
         -------
         MorseWavelet: np.ndarray
         '''
-        self.wavelets = list(map(self.make_wavelet, freqs))
+        # self.wavelets = list(map(self.make_wavelet, freqs))
+        self.wavelets = np.vectorize(self.make_wavelet)(freqs)
         return self.wavelets
 
     def cwt(self, wave: np.ndarray, freqs: Union[Numbers, None],

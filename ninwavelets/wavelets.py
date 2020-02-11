@@ -3,7 +3,9 @@ from typing import Union, List
 import numpy as np
 try:
     import cupy as cp
-except:
+except ImportError as error:
+    print(error)
+    print('Cupy could not be loaded.')
     cp = np
 
 
