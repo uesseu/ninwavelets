@@ -31,7 +31,7 @@ def test() -> None:
     freq = 60
     time = np.arange(0, 3, 0.001)
     sin = np.array(np.sin(time * freq * 2 * np.pi))
-    result = morse.power(sin, range(1, 100))
+    result = morse.power(sin, np.arange(1, 100, 1))
     plt.imshow(result, cmap='RdBu_r')
     plt.gca().invert_yaxis()
     plt.title('CWT of 60Hz sin wave')
@@ -101,15 +101,14 @@ def cwt_test(cuda: bool = False) -> None:
     nin_morlet = Morlet(cuda=cuda, sfreq=1000)
     nin_morlet.mode = WaveletMode.Both
 
-    result_morse = morse.abs(sin, range(1, 1000))
+    result_morse = morse.abs(sin, np.arange(1, 1000, 1))
     result_morlet = nin_morlet.abs(sin, np.arange(1., 1000, 1))
-    # result_mne = cwt(np.array([sin]), morlet(1000, range(1, 1000)))[0]
-    result_mne = cwt(np.array([sin]),
-                     morse.make_wavelets(range(1, 1000)))[0]
+    # result_mne = cwt(np.array([sin]),
+    #                  morse.make_wavelets(np.arange(1, 1000, 1)))[0]
     vmax = 1
     ax1.imshow(np.abs(result_morse), cmap='RdBu_r', vmax=vmax)
     ax2.imshow(np.abs(result_morlet), cmap='RdBu_r', vmax=vmax)
-    ax3.imshow(np.abs(result_mne), cmap='RdBu_r', vmax=vmax)
+    # ax3.imshow(np.abs(result_mne), cmap='RdBu_r', vmax=vmax)
     ax1.invert_yaxis()
     ax2.invert_yaxis()
     ax3.invert_yaxis()
