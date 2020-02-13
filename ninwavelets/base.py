@@ -89,12 +89,6 @@ def pad_to(wave_from: np.ndarray, wave_to: np.ndarray) -> np.ndarray:
         return np.pad(wave_from, [side1, side2], 'constant')
 
 
-def hamming_window(wave: np.ndarray) -> np.ndarray:
-    length = wave.shape[0]
-    window = np.arange(0, 1, 1 / length)
-    return 0.54 - 0.46 * np.cos(2 * np.pi * window)
-
-
 def normalize(wave: np.ndarray, length: float,
               cuda: bool = False) -> np.ndarray:
     ''' Normalize norm of complex array
@@ -372,10 +366,9 @@ class WaveletBase:
         if (not reuse) or (not hasattr(self, 'fft_wavelets')):
             self.make_fft_wavelets(freqs, wave.shape[0] / self.sfreq)
         pad_wave = partial(pad_to, wave_to=wave)
-        wavelet = list(map(pad_wave, self.fft_wavelets))
+        wavelet = np.apply_along_axis(pad_wave, 1, self.fft_wavelets)
         wavelet = cp.asarray(wavelet) if self.cuda else np.array(wavelet)
         fft_wave = cp.fft.fft(cp.asarray(wave)) if self.cuda else fft(wave)
-        # Keep powerful even if long wave.
         if self.cuda:
             result = cp.asnumpy(cp.fft.ifft(wavelet * fft_wave))
         else:

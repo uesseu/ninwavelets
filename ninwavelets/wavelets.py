@@ -249,12 +249,7 @@ class Shannon(WaveletBase):
         self.help = ''
 
     def trans_formula(self, tc: np.ndarray, freq: float = 1) -> np.ndarray:
-        for key, value in enumerate(tc):
-            if value <= 1.:
-                tc[key] = 1.
-            else:
-                tc[key] = 0
-        return tc
+        return np.where(tc <= 1., 1., 0)
 
 
 class Haar(WaveletBase):
@@ -264,11 +259,5 @@ class Haar(WaveletBase):
         self.mode = WaveletMode.Normal
 
     def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
-        for key, value in enumerate(timeline):
-            if (0. < value) and (value <= 1.):
-                timeline[key] = 1.
-            elif (-1. < value) and (value <= 0.):
-                timeline[key] = -1.
-            else:
-                timeline[key] = 0.
-        return timeline
+        timeline = np.where(0. < timeline <= 1., 1, 0)
+        return timeline - np.flip(timeline)
