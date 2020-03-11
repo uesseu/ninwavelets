@@ -5,7 +5,7 @@ setup(
     version='0.0.2',
     install_requires=['scipy', 'numpy'],
     package_dir={'ninwavelets': 'ninwavelets'},
-    packages=find_packages('ninwavelets'),
+    packages=find_packages(),
     description='Wavelets package',
     long_description='''Analystic wavelets package,
 which can perform Generalized Morse and Morlet based cwt.''',
