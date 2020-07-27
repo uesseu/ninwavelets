@@ -86,11 +86,6 @@ plt.title('CWT of 60Hz sin wave')
 plt.show()
 ```
 
-You can also calculate power.
-
-```python
-result = morse.power(sin, range(1, 100))
-```
 
 You can perform baseline correction.
 ```python
@@ -319,7 +314,7 @@ There are these methods.
 
 ninwavelets.EpochsWavelet is a class for Epochs class of mne.
 
-'''python
+```python
 from ninwavelets import EpochsWavelet, Morse, plot_tf
 from mne import read_epochs
 
@@ -328,7 +323,7 @@ epochs = read_epochs(fname)
 morse = Morse()
 result = EpochsWavelet(epochs, morse).power(range(1, 100))
 plot_tf(result)
-'''
+```
 
 At first, make instance of wavelets(Morse, Morlet and so on).
 Then, make EpochsWavelet class.
