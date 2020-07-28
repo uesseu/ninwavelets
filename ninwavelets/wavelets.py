@@ -1,5 +1,5 @@
 from .base import WaveletBase, WaveletMode
-from typing import Union, List
+from typing import Union, List, cast
 import numpy as np
 try:
     import cupy as cp
@@ -136,13 +136,18 @@ class Morlet(WaveletBase):
                 * (np.exp(-np.square(self.sigma-freqs) / 2)
                    - self.k * np.exp(-np.square(freqs) / 2)))
 
+    def cp_formula(self, timeline: cp.ndarray, freq: float = 1) -> np.ndarray:
+        return (self.c * (cp.pi ** (-1 / 4))
+                * cp.e ** (-cp.square(timeline) / 2)
+                * (cp.e ** (self.sigma * 1j * timeline) - self.k))
+
     def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
         return (self.c * np.float_power(np.pi, (-1 / 4))
                 * np.exp(-np.square(timeline) / 2)
                 * (np.exp(self.sigma * 1j * timeline) - self.k))
 
     def peak_freq(self, freq: float) -> float:
-        return self.sigma / (1. - np.exp(-self.sigma * freq))
+        return cast(float, self.sigma / (1. - np.exp(-self.sigma * freq)))
 
 
 class MorseMNE(Morse):
@@ -185,7 +190,7 @@ MorletWavelet by IFFT.'''
         Result of cwt. Complex np.ndarray.
         '''
         return tfr.cwt(wave,
-                       list(self.make_wavelets(range(1, 100))),
+                       tuple(self.make_wavelets(range(1, 100))),
                        use_fft=use_fft,
                        mode=mode, decim=decim).mean(axis=0)
 

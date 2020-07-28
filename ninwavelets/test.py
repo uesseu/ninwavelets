@@ -10,10 +10,13 @@ from ninwavelets import (Morse, MorseMNE, Morlet, WaveletMode,
                          Haar, plot_tf, MexicanHat, Shannon, Baseline)
 from mne.io import Raw
 import gc
+from time import time
 from sys import argv
 
 
-def make_example(length: float = 3) -> np.ndarray:
+def make_example(length: float = 3, cuda: bool = True) -> np.ndarray:
+    if cuda:
+        np=cp
     freq: float = 60
     time: np.ndarray = np.arange(0, length, 0.001)
     sin = np.array(np.sin(time * freq * 2 * np.pi) +
@@ -46,7 +49,7 @@ def test3d() -> None:
     morse_obj = Morse(sfreq, 17.5, 3)
     morse = morse_obj.make_wavelet(hz)
     nm = Morlet(sfreq)
-#    nm.mode = WaveletMode.Normal
+    nm.mode = WaveletMode.Normal
     nin_morlet = nm.make_wavelet(hz)
 
     half_morse = morse.shape[0] / 2
@@ -91,31 +94,39 @@ def plot_sin_fft() -> None:
     plt.show()
 
 
-def cwt_test(cuda: bool = False) -> None:
-    sin = make_example(1)
-    ax1 = plt.subplot(3, 1, 1)
-    ax2 = plt.subplot(3, 1, 2)
-    ax3 = plt.subplot(3, 1, 3)
+def cwt_test(cuda: bool = False, show: bool = False) -> None:
+    sin = make_example()
 
-    morse = Morse(cuda=cuda)
+    morse = Morse(cuda=cuda, sfreq=1000)
     nin_morlet = Morlet(cuda=cuda, sfreq=1000)
-    nin_morlet.mode = WaveletMode.Both
+    nin_morlet.mode = WaveletMode.Reverse
 
-    result_morse = morse.abs(sin, np.arange(1, 1000, 1))
-    result_morlet = nin_morlet.abs(sin, np.arange(1., 1000, 1))
-    # result_mne = cwt(np.array([sin]),
-    #                  morse.make_wavelets(np.arange(1, 1000, 1)))[0]
-    vmax = 1
-    ax1.imshow(np.abs(result_morse), cmap='RdBu_r', vmax=vmax)
-    ax2.imshow(np.abs(result_morlet), cmap='RdBu_r', vmax=vmax)
-    # ax3.imshow(np.abs(result_mne), cmap='RdBu_r', vmax=vmax)
-    ax1.invert_yaxis()
-    ax2.invert_yaxis()
-    ax3.invert_yaxis()
-    ax1.set_title('Morse')
-    ax2.set_title('Morlet')
-    ax3.set_title('MNE')
-    plt.show()
+    result_morse = morse.power(sin, cp.arange(1, 1000, 1))
+    result_morlet = nin_morlet.abs(sin, cp.arange(1., 1000, 1))
+    if cuda:
+        sin = cp.asnumpy(sin)
+        morlet = Morlet(cuda=False)
+        morlet.mode = WaveletMode.Both
+    result_mne = cwt(np.array([sin]),
+                     morlet.make_wavelets(np.arange(1, 1000, 1)))[0]
+    if show:
+        if cuda:
+            result_morse = cp.asnumpy(result_morse)
+            result_morlet = cp.asnumpy(result_morlet)
+        ax1 = plt.subplot(3, 1, 1)
+        ax2 = plt.subplot(3, 1, 2)
+        ax3 = plt.subplot(3, 1, 3)
+        vmax = 1
+        ax1.imshow(np.abs(result_morse), cmap='RdBu_r', vmax=vmax)
+        ax2.imshow(np.abs(result_morlet), cmap='RdBu_r', vmax=vmax)
+        ax3.imshow(np.abs(result_mne), cmap='RdBu_r', vmax=vmax)
+        ax1.invert_yaxis()
+        ax2.invert_yaxis()
+        ax3.invert_yaxis()
+        ax1.set_title('Morse')
+        ax2.set_title('Morlet')
+        ax3.set_title('MNE')
+        plt.show()
     # result_morse = morse.power(sin, reuse=True)
     # plot_tf(result_morse)
     # plt.show()
@@ -184,12 +195,21 @@ def eeg(cuda: bool) -> None:
     ax.set_ylabel('Hz')
     plt.show()
 
+def speed_test():
+    t = time()
+    sin=make_example(50)
+    morse = Morse(cuda=cuda, sfreq=1000)
+    result_morse = morse.power(sin, cp.arange(1, 1000, 1))
+    print(time() - t)
+
 
 if __name__ == '__main__':
     print('Test Run')
     # plot_sin_fft()
     # test()
     cuda = True if 'cuda' in argv else False
+    if cuda:
+        print('CUDA is on')
     if 'sin' in argv:
         plot_sin_fft()
     if 'wave' in argv:
@@ -197,6 +217,8 @@ if __name__ == '__main__':
         fft_wavelet_test()
         other_wavelet_test()
     if 'cwt' in argv:
-        cwt_test(cuda)
+        cwt_test(cuda, show=True)
     if 'eeg' in argv:
         eeg(cuda)
+    if 'speed' in argv:
+        speed_test()
