@@ -6,26 +6,31 @@ from multiprocessing import Pool
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft, ifft
 from mne.time_frequency.tfr import morlet, cwt
-from ninwavelets import (Morse, MorseMNE, Morlet, WaveletMode,
+from ninwavelets import (Morse, MorseMNE, Morlet, CWTMode,
                          Haar, plot_tf, MexicanHat, Shannon, Baseline)
 from mne.io import Raw
 import gc
 from time import time
 from sys import argv
+from logging import getLogger, INFO, basicConfig
+from functools import partial
+
+basicConfig(level=INFO)
+log = getLogger()
 
 
 def make_example(length: float = 3, cuda: bool = True) -> np.ndarray:
-    if cuda:
-        np=cp
     freq: float = 60
-    time: np.ndarray = np.arange(0, length, 0.001)
-    sin = np.array(np.sin(time * freq * 2 * np.pi) +
-                   np.sin(time * 160 * 2 * np.pi) * np.sin(time * np.pi) +
-                   np.sin(np.pad(np.arange(0, length / 2, 0.001),
+    ncp = cp if cuda else np
+    time: ncp.ndarray = ncp.arange(0, length, 0.001)
+    sin = ncp.array(ncp.sin(time * freq * 2 * ncp.pi) +
+                   ncp.sin(time * 160 * 2 * ncp.pi) * ncp.sin(time * ncp.pi) +
+                   ncp.sin(ncp.pad(ncp.arange(0, length / 2, 0.001),
                                  [int(length * 250), int(length * 250)],
                                  'constant') *
-                          300 * 2 * np.pi)
+                          300 * 2 * ncp.pi)
                    )
+    # result = [ncp.copy(sin) for n in range(1000)]
     return sin
 
 
@@ -49,7 +54,7 @@ def test3d() -> None:
     morse_obj = Morse(sfreq, 17.5, 3)
     morse = morse_obj.make_wavelet(hz)
     nm = Morlet(sfreq)
-    nm.mode = WaveletMode.Normal
+    nm.mode = CWT.Fast
     nin_morlet = nm.make_wavelet(hz)
 
     half_morse = morse.shape[0] / 2
@@ -95,20 +100,41 @@ def plot_sin_fft() -> None:
 
 
 def cwt_test(cuda: bool = False, show: bool = False) -> None:
-    sin = make_example()
+    sin = make_example(1, cuda)
+    if cuda:
+        sin = cp.asarray(sin)
 
+    ncp = cp if cuda else np
+    log.info('''Fast mode test for GMW''')
     morse = Morse(cuda=cuda, sfreq=1000)
-    nin_morlet = Morlet(cuda=cuda, sfreq=1000)
-    nin_morlet.mode = WaveletMode.Reverse
+    result_morse = morse.power(sin, ncp.arange(1, 1000, 1))
 
-    result_morse = morse.power(sin, cp.arange(1, 1000, 1))
-    result_morlet = nin_morlet.abs(sin, cp.arange(1., 1000, 1))
+    log.info('''Change to Normal mode test for GMW only for numpy''')
+    if not cuda:
+        morse.mode = CWTMode.Normal
+    t = time()
+    morse.power(sin, ncp.arange(1, 1000, 1), reuse=False)
+    print(time() - t)
+    print(time() - t)
+
+    log.info('''Normal mode test
+Normal mode is only for numpy
+Because cupy 7.6.0 has no method named convolve''')
+    nin_morlet = Morlet(cuda=False, sfreq=1000)
+    if not cuda:
+        nin_morlet.mode = CWTMode.Normal
+    result_morlet = nin_morlet.power(cp.asnumpy(sin), np.arange(1, 1000, 1))
     if cuda:
         sin = cp.asnumpy(sin)
         morlet = Morlet(cuda=False)
-        morlet.mode = WaveletMode.Both
+        morlet.mode = CWTMode.Fast
+    else:
+        sin = cp.asnumpy(sin)
+        morlet = Morlet(cuda=False)
+    t = time()
     result_mne = cwt(np.array([sin]),
-                     morlet.make_wavelets(np.arange(1, 1000, 1)))[0]
+                     morlet.make_wavelets(np.arange(1, 1000, 1)))[0] ** 2
+    print(time() - t)
     if show:
         if cuda:
             result_morse = cp.asnumpy(result_morse)
@@ -116,7 +142,7 @@ def cwt_test(cuda: bool = False, show: bool = False) -> None:
         ax1 = plt.subplot(3, 1, 1)
         ax2 = plt.subplot(3, 1, 2)
         ax3 = plt.subplot(3, 1, 3)
-        vmax = 1
+        vmax = 10
         ax1.imshow(np.abs(result_morse), cmap='RdBu_r', vmax=vmax)
         ax2.imshow(np.abs(result_morlet), cmap='RdBu_r', vmax=vmax)
         ax3.imshow(np.abs(result_mne), cmap='RdBu_r', vmax=vmax)
@@ -127,8 +153,15 @@ def cwt_test(cuda: bool = False, show: bool = False) -> None:
         ax2.set_title('Morlet')
         ax3.set_title('MNE')
         plt.show()
+    print(np.max(np.abs(result_morse)))
+    print(np.max(np.abs(result_morlet)))
+    print(np.max(np.abs(result_mne)))
+    print(np.abs(result_morse).mean())
+    print(np.abs(result_morlet).mean())
+    print(np.abs(result_mne).mean())
     # result_morse = morse.power(sin, reuse=True)
-    # plot_tf(result_morse)
+
+    plot_tf(result_morse)
     # plt.show()
 
 
@@ -145,6 +178,17 @@ def other_wavelet_test() -> None:
     plt.plot(np.abs(fft(shannon)))
     plt.plot(np.abs(fft(morlet)))
     plt.show()
+    sin = make_example(1, False)
+
+    log.info('Other wavelets')
+    log.info('Haar wavelets')
+    result_haar = Haar(1000).power(sin, np.arange(1, 1000, 1))
+    plot_tf(result_haar)
+
+    log.info('Other wavelets')
+    log.info('Mexican wavelets')
+    result_mexican = MexicanHat(1000).power(sin, np.arange(1, 1000, 1))
+    plot_tf(result_mexican)
 
 
 def fft_wavelet_test() -> None:
@@ -155,7 +199,7 @@ def fft_wavelet_test() -> None:
     morse = Morse(r=r, b=b)
     nin_morlet = Morlet(sigma=s, sfreq=1000)
     normal_morlet = Morlet(sigma=s, sfreq=1000)
-    normal_morlet.mode = WaveletMode.Normal
+    normal_morlet.mode = CWTMode.Normal
     fig = plt.figure()
     w = morse.make_wavelet(hz)
     a = morse.make_fft_wavelet(hz)
@@ -195,11 +239,14 @@ def eeg(cuda: bool) -> None:
     ax.set_ylabel('Hz')
     plt.show()
 
-def speed_test():
+
+def speed_test(i: int,cuda: bool) -> None:
     t = time()
-    sin=make_example(50)
+    sin = make_example(50, cuda)
     morse = Morse(cuda=cuda, sfreq=1000)
-    result_morse = morse.power(sin, cp.arange(1, 1000, 1))
+    ncp = cp if cuda else np
+    for n in range(50):
+        result_morse = morse.power(sin, ncp.arange(1, 1000, 1))
     print(time() - t)
 
 
@@ -221,4 +268,12 @@ if __name__ == '__main__':
     if 'eeg' in argv:
         eeg(cuda)
     if 'speed' in argv:
-        speed_test()
+        if 'multi' in argv:
+            with Pool(6) as p:
+                p.map(partial(speed_test, cuda=cuda), range(8))
+        else:
+            speed_test(0, cuda=cuda)
+    if 'all' in argv:
+        cwt_test(True, show=True)
+        cwt_test(False, show=True)
+        other_wavelet_test()

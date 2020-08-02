@@ -1,4 +1,4 @@
-from .base import WaveletBase, WaveletMode
+from .base import WaveletBase, CWTMode
 from typing import Union, List, cast
 import numpy as np
 try:
@@ -6,12 +6,14 @@ try:
 except ImportError as error:
     print(error)
     print('Cupy could not be loaded.')
-    cp = np
 
 
 class Morse(WaveletBase):
     '''
-    Generator of Generalized Morse Wavelets.
+    Morse Wavelets.
+    It is new wavelet, which is orthonormal.
+    Unlike Morlet Wavelets, it is robust for any parameters.
+
     Example.
     >>> morse = Morse(1000, r=3., b=17.5)
     >>> freq = 60
@@ -25,15 +27,19 @@ class Morse(WaveletBase):
 
     Parameters
     ----------
-    sfreq: float | Sampling frequency.
-        This behaves like sfreq of mne-python.
-    b: float | beta value
-    r: float | gamma value. 3 may be good value.
-    length: float | Length of wavelet.
+    sfreq: float
+        Sampling frequency. This behaves like sfreq of mne-python.
+    b: float
+        beta value
+    r: float
+        gamma value. 3 may be good value.
+    real_wave_length: float
+        Length of wavelet.
         It does not make sence when you use fft only.
         Too long wavelet causes slow calculation.
         This param is cutting threshould of wavelets.
-        Peak wave * length is the length of wavelet.
+    cuda: bool
+        Use cuda
 
     Returns
     -------
@@ -45,7 +51,7 @@ class Morse(WaveletBase):
         super(Morse, self).__init__(sfreq, real_wave_length, cuda)
         self.r: float = r
         self.b: float = b
-        self.mode = WaveletMode.Reverse
+        self.mode = CWTMode.Fast
         self.help = '''This is inverse Fourier transformed MorseWavelet.
 Originally, Generalized Morse wavelet is
 Frourier transformed wave.
@@ -80,8 +86,12 @@ MorletWavelet by IFFT.'''
 class Morlet(WaveletBase):
     '''
     Morlet Wavelets.
+    A traditional analystic wavelet, which is used widely.
+    When sigma value is too small, the wavelet waveform is distorted.
+    It is like Gabor Wavelet, which is not orthonormal.
+
     Example.
-    >>> morse = Morse(1000, sigma=7.)
+    >>> morse = Morlet(1000, sigma=7.)
     >>> freq = 60
     >>> time = np.arange(0, 0.3, 0.001)
     >>> sin = np.array([np.sin(time * freq * 2 * np.pi)])
@@ -98,12 +108,16 @@ class Morlet(WaveletBase):
         This behaves like sfreq of mne-python.
     sigma: float
         sigma value
-    length: float
+    gabor: bool
+        Use Gabor Wavelet.
+    read_wave_length: float
         Length of wavelet.
         It does not make sence when you use fft only.
         Too long wavelet causes slow calculation.
         This param is cutting threshould of wavelets.
         Peak wave * length is the length of wavelet.
+    cuda: bool
+        Use cuda.
 
     Returns
     -------
@@ -114,7 +128,7 @@ class Morlet(WaveletBase):
                  real_wave_length: float = 1.,
                  gabor: bool = False, cuda: bool = False) -> None:
         super(Morlet, self).__init__(sfreq, real_wave_length, cuda)
-        self.mode = WaveletMode.Both
+        self.mode = CWTMode.Fast
         self.sigma = sigma
         self.c = np.float_power(1
                                 + np.exp(-np.square(self.sigma))
@@ -163,7 +177,7 @@ class MorseMNE(Morse):
         super(MorseMNE, self).__init__(sfreq, real_wave_length, cuda)
         self.r: float = r
         self.b: float = b
-        self.mode = WaveletMode.Reverse
+        self.mode = CWTMode.Fast
         self.help = '''This is inverse Fourier transformed MorseWavelet.
 Originally, Generalized Morse wavelet is
 Frourier transformed wave.
@@ -197,14 +211,20 @@ MorletWavelet by IFFT.'''
 
 class MexicanHat(WaveletBase):
     '''
-    Generator of MexicanHat Wavelets.
+    MexicanHat Wavelets.
+    It is wavelet of real number.
+    And so, you can see rainbow like result after cwt.
 
     Parameters
     ----------
-    sfreq: float | Sampling frequency.
-        This behaves like sfreq of mne-python.
-    sigma: float | sigma value
-    length: float | Length of wavelet.
+    sfreq: float
+        Sampling frequency.  This behaves like sfreq of mne-python.
+    sigma: float
+        sigma value
+    read_wave_length: float
+        Length of wavelet.
+    cuda: bool
+        Use cuda
 
     Returns
     -------
@@ -215,8 +235,9 @@ class MexicanHat(WaveletBase):
                  real_wave_length: float = 1., cuda: bool = False) -> None:
         super(MexicanHat, self).__init__(sfreq, real_wave_length, cuda)
         self.sigma: float = sigma
-        self.mode = WaveletMode.Normal
+        self.mode = CWTMode.Fast
         self.help = ''
+        self.cuda = cuda
 
     def formula(self, tc: np.ndarray, freq: float = 1) -> np.ndarray:
         return ((1 - np.power(tc / self.sigma, 2))
@@ -227,30 +248,32 @@ class MexicanHat(WaveletBase):
                 * cp.exp(-cp.square(tc) / cp.square(self.sigma) / 2))
 
     def peak_freq(self, freq: float) -> float:
-        return np.sqrt(6) / np.pi / np.pi
+        return cast(float, np.sqrt(6.) / (np.pi ** 2))
 
 
 class Shannon(WaveletBase):
     '''
-    Generator of MexicanHat Wavelets.
+    Shannon Wavelets.
+    When you fourier transform this, you can see rectangle wave.
 
     Parameters
     ----------
-    sfreq: float | Sampling frequency.
-        This behaves like sfreq of mne-python.
-    sigma: float | sigma value
-    length: float | Length of wavelet.
+    sfreq: float
+        Sampling frequency.  This behaves like sfreq of mne-python.
+    read_wave_length: float
+        Length of wavelet.
+    cuda: bool
+        Use cuda
 
     Returns
     -------
-    As constructor, MexicanHat instance its self.
+    As constructor, Shannon instance its self.
     '''
 
-    def __init__(self, sfreq: float = 1000, sigma: float = 7,
+    def __init__(self, sfreq: float = 1000, 
                  real_wave_length: float = 1., cuda: bool = False) -> None:
         super(Shannon, self).__init__(sfreq, real_wave_length, cuda)
-        self.sigma: float = sigma
-        self.mode = WaveletMode.Reverse
+        self.mode = CWTMode.Fast
         self.help = ''
 
     def trans_formula(self, tc: np.ndarray, freq: float = 1) -> np.ndarray:
@@ -258,10 +281,30 @@ class Shannon(WaveletBase):
 
 
 class Haar(WaveletBase):
+    '''
+    Haar Wavelets.
+    It looks like rectangle wave.
+    It is an acient wavelet, and still useful for compressing data.
+    But it is not used for analystic way generally.
+
+    Parameters
+    ----------
+    sfreq: float
+        Sampling frequency.
+    read_wave_length: float
+        Length of wavelet.
+    cuda: bool
+        Use cuda
+
+    Returns
+    -------
+    As constructor, Shannon instance its self.
+    '''
     def __init__(self, sfreq: float = 1000,
-                 real_wave_length: float = 1.) -> None:
-        super(Haar, self).__init__(sfreq, real_wave_length)
-        self.mode = WaveletMode.Normal
+                 real_wave_length: float = 1., cuda: bool = False) -> None:
+        super(Haar, self).__init__(sfreq, real_wave_length, cuda)
+        self.mode = CWTMode.Convolve
+        self.cuda = cuda
 
     def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
         timeline = np.where(0. < timeline <= 1., 1, 0)

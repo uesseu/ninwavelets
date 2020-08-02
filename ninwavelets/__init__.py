@@ -1,3 +1,3 @@
-from .base import WaveletBase, WaveletMode, plot_tf, Baseline
+from .base import WaveletBase, CWTMode, plot_tf, Baseline
 from .wavelets import Morse, MorseMNE, Morlet, Haar, MexicanHat, Shannon
-from .mneutils import EpochsWavelet
+# from .mneutils import EpochsWavelet
