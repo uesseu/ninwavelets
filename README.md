@@ -23,8 +23,8 @@ Please see Advantages and Limitations.
     + You can use it with mne-python.(Sensor based only...)
     + Numpy and Cupy is available.
 - Reliability(???)
-    + I am not a scholar, not a engineer, just a nurd.
-    + Just read the source code! It is obligation for freedom if you use OSS.
+    + I am not a scholar, not a engineer
+    + Do not rely on it! Read the source code!
 - In heavyly debelopment
     + Destructive change may performed.
 
@@ -63,17 +63,13 @@ pip install mne
 
 # Purpose and background
 At first, this package was written to perform GMW with mne python.  
-But I found that, using mne function with this package is ugly way.  
-Because GMW needs inverse Fourier transform to no purpose.  
-GMW should skip one inverse FFT.(Skipping is beautiful)  
-Now it has own CWT method, which can skip one FFT.  
+But I wrote CWT.  
+Because GMW can skip one inverse FFT.(Skipping is beautiful?)  
+Now it has own CWT method, which can skip one inverse FFT.  
 And I noticed, it is good for Morlet Wavelet too.  
-
 
 It is a brand new project, and under heavily development(On my Sunday).  
 Destructive changes may be made.  
-I do not think, you want to use it, but when you use it, check the version strictly!  
-
 
 # Exsamples
 GMW is similar to morlet wavelet, if you use default param.  
@@ -183,7 +179,7 @@ GMW = InverseFFT(raw_formula)
 
 In this case, it perform inverse fft before convolving.  
 
-Normal is easy to understand, but slower than Fast.  
+Normal is easy to understand, can use cuda, but slower than Fast.  
 Fast is ofcource fast, more precise than Normal, and can use cuda.  
 Convolve may too heavy and not good method for GMW but it may be good for Haar.
 
@@ -229,7 +225,7 @@ Parameters
 | sfreq       | float | 1000Hz  | Sampling frequency.                                          |
 | b           | float | 17.5    | beta value                                                   |
 | r           | float | 3       | gamma value. 3 may be good value.                            |
-| length      | float | 10      | Length paramater. It affects only when you plot wavelets.    |
+| real_wave_length      | float | 10      | Length of wavelet(sec).   |
 | cuda        | bool  | False   | Use cuda or not. See 'Performance of wavelet transform'.     |
 
 ```python
@@ -592,22 +588,14 @@ And so, there must be lots of bugs and IT IS USELESS.
 **You should not use this package for work!**  
 (In fact, this package is useful "for me".)  
 
-~~Ofcource, I can not say "This is reliable code" at all.~~  
-~~But is it impossible to write python for non engineer?~~  
-~~Is it impossibe to understand wavelet transform for non scholar?~~  
-
 # Contribution
 I am glad to receive contribution!  
-Because I am a lonely nurd, if I could speak about wavelet, I am pleased.  
 I want to hear constructive oppinions, if I could.  
 
 But, I cannot receive such contribution like...  
 
 - Delete whole of this repository to delete bugs!
 - I am a PHD, and so, just change the authors name and make it reliable!
-
-I want to enjoy, and if I could, I want to let you enjoy.  
-It is the rule of this project.  
 
 # Licence
 Copyright (c) 2020 Forest Segne
