@@ -126,22 +126,23 @@ Because cupy 7.6.0 has no method named convolve''')
     result_morlet = nin_morlet.power(cp.asnumpy(sin), np.arange(1, 1000, 1))
     if cuda:
         sin = cp.asnumpy(sin)
-        morlet = Morlet(cuda=False)
-        morlet.mode = CWTMode.Fast
+        nin_morlet = morlet(1000, np.arange(1, 1000, 1), zero_mean=True)[0]
+        # morlet = Morlet(cuda=False)
+        # morlet.mode = CWTMode.Fast
     else:
         sin = cp.asnumpy(sin)
-        morlet = Morlet(cuda=False)
+        # morlet = Morlet(cuda=False)
     t = time()
     result_mne = cwt(np.array([sin]),
-                     morlet.make_wavelets(np.arange(1, 1000, 1)))[0] ** 2
+                     morlet(1000, np.arange(1, 1000, 1)))[0] ** 2
     print(time() - t)
     if show:
         if cuda:
             result_morse = cp.asnumpy(result_morse)
             result_morlet = cp.asnumpy(result_morlet)
-        ax1 = plt.subplot(3, 1, 1)
-        ax2 = plt.subplot(3, 1, 2)
-        ax3 = plt.subplot(3, 1, 3)
+        ax1 = plt.subplot(1, 3, 1)
+        ax2 = plt.subplot(1, 3, 2)
+        ax3 = plt.subplot(1, 3, 3)
         vmax = 10
         ax1.imshow(np.abs(result_morse), cmap='RdBu_r', vmax=vmax)
         ax2.imshow(np.abs(result_morlet), cmap='RdBu_r', vmax=vmax)

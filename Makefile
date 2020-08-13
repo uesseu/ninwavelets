@@ -1,6 +1,10 @@
-all:
-	python setup_cy.py build_ext --inplace
-run:
-	python setup_cy.py build_ext --inplace
-	python -m nin_wavelets.test
+python='python3'
+server='testpypi'
 
+all:
+	$(python) setup.py sdist bdist_wheel
+upload:
+	$(python) -m twine upload --repository $(server) dist/*
+setup:
+	$(python) -m pip install --user --upgrade setuptools wheel
+	$(python) -m pip install --user --upgrade twine
