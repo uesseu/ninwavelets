@@ -6,26 +6,39 @@ It is based on Numpy or Cuda, and it may be fast especially on Cuda.
 ![My EEG Power!](img/alpha.png)  
 This is my alpha band of EEG which was processed by this package.
 
+```python
+import cupy as cp
+from ninwavelets import Morse
+freqs = cp.array(20, 100, 1)
+
+wave = cp.sin(cp.arange(0, 1000, 1))
+morse = Morse(1000)
+morse.cwt(wave, freqs)
+# morse.cwt(wave, cp.arange(20, 100, 1))   is slow!
+```
+
+
 # Why NinWavelets?
-There may be some advantages and critical(?) limitations.  
+There may be big advantages and limitations.  
 Please see Advantages and Limitations.  
 
 - Use wavelets which is originally Frourier transformed
-    + Generalized Morse(I wanted this and so I wrote it.)
-    + Morlet/Gabor(Frourier transformed version.)
+    + Generalized Morse(A flexible wavelet, which has two parameters.)
+    + Morlet/Gabor(Frourier transformed version of Morlet/Gabor.)
     + Shannon(It looks like Haar, when fourier transformed.)
     + May be more(It is easy to scale!)
 - Skipping one FFT when performing CWT.
     + May be better and faster if you use FFT method.
 - Cuda
-    + If you want to process long wave, it may be extremely faster!
+    + It may be extremely faster!
 - Compatibility
     + You can use it with mne-python.(Sensor based only...)
     + Numpy and Cupy is available.
-- Reliability(???)
-    + I am not a scholar, not a engineer
+- Reliability
+    + Brand new project, and no achivement...
+    + There may be bugs.
     + Do not rely on it! Read the source code!
-- In heavyly debelopment
+- In heavily debelopment
     + Destructive change may performed.
 
 # Install
@@ -51,7 +64,8 @@ and then, run
 pip install cupy
 ```
 
-It is faster if you process long wave, like my EEG power example.  
+Ninwavelets with cuda is extremely fast if you process long wave,  
+like my EEG power example.  
 
 Optionally, if you want to process EEG/MEG, you can use this.  
 
@@ -62,9 +76,9 @@ pip install mne
 ```
 
 # Purpose and background
-At first, this package was written to perform GMW with mne python.  
+At first, this package was written to perform GMW on mne python.  
 But I wrote CWT.  
-Because GMW can skip one inverse FFT.(Skipping is beautiful?)  
+Because GMW can skip one inverse FFT.  
 Now it has own CWT method, which can skip one inverse FFT.  
 And I noticed, it is good for Morlet Wavelet too.  
 
@@ -127,7 +141,7 @@ These are results from my test code.
 ![cwt](img/cwt.png)
 
 # Mode of wavelets
-This package has some mode to calculate CWT.  
+This package has some modes to calculate CWT.  
 You can use them like this.  
 
 ```
@@ -137,11 +151,11 @@ morlet = Morlet().set_mode(CMTMode.Normal)
 
 set_mode method retuns it self ;).
 
-|Name|nature|
-|--|--|
-|Normal|Easy to understand. May be precise for Morlet.|
-|Fast|Very fast, may be best for GMW and Morlet|
-|Convolve|Just slow. Sloooooooow!|
+| Name     | nature                                         |
+|----------|------------------------------------------------|
+| Normal   | Easy to understand. May be precise for Morlet. |
+| Fast     | Very fast, may be best for GMW and Morlet.     |
+| Convolve | Just slow. Sloooooooow!                        |
 
 
 Wrighting in english may not be easy to understand.  
@@ -179,29 +193,42 @@ GMW = InverseFFT(raw_formula)
 
 In this case, it perform inverse fft before convolving.  
 
-Normal is easy to understand, can use cuda, but slower than Fast.  
-Fast is ofcource fast, more precise than Normal, and can use cuda.  
-Convolve may too heavy and not good method for GMW but it may be good for Haar.
+```
+Convolve(InverseFFT(Transformed_wavelet) @ wave_to_analyze)
+```
 
-If there is a formula of fourier transformed wavelet,  
-Reverse mode may be best mode.  
-But, not all the wavelet has formula.  
+It seems bad, and this is why I wrote this package.  
+
+### Reverse mode
+Even if there is formula of wavelet, in this mode,  
+ninwavelet try to perform inverseFFT before convolving.  
+
+
+## About modes
+Normal mode is easy to understand, can use cuda, but slower than Fast mode.  
+Fast mode is fast, may be more precise than Normal, and can use cuda.  
+Convolve mode may too heavy and not good method for GMW but it may be good for Haar.
+Reverse mode is ugly way and just for debugging.  
+
+But, not all the wavelets have formula.  
 For example, I do not know the formula of raw GMW.  
 (Generally, GMW is calculated by inverse fourier transform.)
 
-This pseudo code let ninwavelet calculate by raw wave of morse.
+This pseudo code let ninwavelet calculate by iFFTed wave of morse.
 
 ```python
 from ninmne import CWTMode, Morlet
 morlet = Morlet(1000)
-morlet.mode = WaveletMode.Normal
+morlet.set_mode(WaveletMode.Convolve)
 transformed = morlet.power(wave)
 ```
+
+But, I think, CWTMode should be set properly when the class is inherited.  
 
 # Reference
 ## WaveletClasses
 
-They are classes for wavelet. They are sub class of WaveletBase.  
+They are classes for wavelet. They are sub classes of WaveletBase.  
 You can inherit 'WaveletBase' class and make your own wavelet.  
 I wrote some wavelets.  
 
@@ -215,41 +242,38 @@ from ninwavelets import Morse
 ```python
 Morse(self, sfreq: float = 1000,
       b: float = 17.5, r: float = 3,
-      length: float = 10, cuda: bool = False) -> None:
+      real_wave_length: float = 10, cuda: bool = False) -> None:
 ```
 
 Parameters
 
-| Param       | Type  | Default |                                                              |
-| --          | --    | --      | --                                                           |
-| sfreq       | float | 1000Hz  | Sampling frequency.                                          |
-| b           | float | 17.5    | beta value                                                   |
-| r           | float | 3       | gamma value. 3 may be good value.                            |
-| real_wave_length      | float | 10      | Length of wavelet(sec).   |
-| cuda        | bool  | False   | Use cuda or not. See 'Performance of wavelet transform'.     |
+| Param            | Type  | Default |                                                          |
+| --               | --    | --      | --                                                       |
+| sfreq            | float | 1000Hz  | Sampling frequency.                                      |
+| b                | float | 17.5    | beta value                                               |
+| r                | float | 3       | gamma value. 3 may be good value.                        |
+| real_wave_length | float | 10      | Length of wavelet(sec). It is modified when CWT.         |
+| cuda             | bool  | False   | Use cuda or not. See 'Performance of wavelet transform'. |
 
 ```python
-morse = Morse()
+morse = Morse(1000)
 ```
 
-But, I dont know whether it is good or bad...  
-
-This is an example. List of wavelet classes is this.  
-All of them are in module 'nin_wavelets.wavelets' and
-you can use it by this code.
+List of wavelet classes is written bellow.  
+All of them are in module 'nin_wavelets.wavelets' and you can use it by such code.  
 
 ```python
-from nin_wavelets import hoge
+from nin_wavelets import Morse
 ```
 
-| Name              | Name in this package              |
-|-------------------|-----------------------------------|
-| Generalized Morse | Morse                             |
-| Complex Morlet    | Morlet                            |
-| Complex Shannon   | Shannon                           |
-| Gausian(Gabor)    | Morlet(gabor option is available) |
-| MexicanHat        | MexicanHat                        |
-| Haar              | Haar(This is not good!)           |
+| Name              | Name in this package                   |
+|-------------------|----------------------------------------|
+| Generalized Morse | Morse                                  |
+| Complex Morlet    | Morlet                                 |
+| Complex Shannon   | Shannon                                |
+| Gausian(Gabor)    | Morlet(gabor option is available)      |
+| MexicanHat        | MexicanHat                             |
+| Haar              | Haar(This is not good in ninwavelets!) |
 
 ### make_wavelets
 
@@ -267,8 +291,10 @@ Make list of wavelets.
 
 Because it returnes bad wave easily,  
 you should use it when you plot it only.  
+When you perform CWT, ninwavelets can select best way,  
+and the best way do not use raw wavelet in some cases.  
 For example, GMW with sfreq=1000, freq=3 returnes bad wave.  
-If you want good wave, you must set  
+If you want good wave, you must set 'real_wave_length' at constructor.  
 
 Returns  
 MorseWavelet: list of np.ndarray  
@@ -283,25 +309,27 @@ Make Fourier transformed Wavelet.
 If the wavelet is originally Frourier transformed wavelet,
 it just calculate original formula.
 If wavelet is originally not Fourier transformed wavelet,
-it run FFT to make them.
+it run FFT to make them.  
 
 ### cwt
-CWT method.
+Perform CWT.  
 
-| Param    | Type  |                                                                      |
-|----------|-------|----------------------------------------------------------------------|
-| wave     | float | Wave drawed by numpy.                                                |
-| freqs    | float | List of frequencies.                                                 |
-| max_freq | float | Max freq.                                                            |
-| reuse    | bool  | Reuse wavelets you made before. If true, calculation becomes faster. |
+Parameters
+| Arg    | Type                          |                        |
+|--------|-------------------------------|------------------------|
+| wave   | Union[np.ndarray, cp.ndarray] | Raw wave to transform. |
+| freqs  | List[float]                   | Frequencies.           |
+| reuse  | bool = True                   | Reuse wavelet or not.  |
+| logger | Logger = logger               | Custom logger          |
 
-```python
-def cwt(self, wave: np.ndarray,
-        freqs: Union[List[float], range, np.ndarray],
-        max_freq: int = 0, reuse=True) -> np.ndarray:
-```
+If raw wave length differ from length of wavelet,  
+or freqs are differ from previous transformation,  
+recreate wavelet even if "reuse" is True.  
 
-example
+Returns result of CWT, which type is Union[np.ndarray, cp.ndarray].  
+
+
+Example
 
 ```python
 import numpy as np
@@ -316,57 +344,19 @@ plt.imshow(np.abs(result), cmap='RdBu_r')
 plt.show()
 ```
 
-max_freq is a param to cut result.
 
 ## power
-```
-power(self, wave: np.ndarray,
-      freqs: Union[List[float], range, np.ndarray],
-      reuse=True) -> np.ndarray:
-```
+Same as CWT, but returns power value.  
+Power value is square(abs(cwt)).
 
-Run cwt of mne-python, and compute power.
-
-| Param    | Type  |                                                                      |
-|----------|-------|----------------------------------------------------------------------|
-| wave     | float | Wave drawed by numpy.                                                |
-| freqs    | float | List of frequencies.                                                 |
-| max_freq | float | Max freq.                                                            |
-| reuse    | bool  | Reuse wavelets you made before. If true, calculation becomes faster. |
-
-Returns  
-Result of cwt. np.ndarray.  
-
-
-## MorseMNE Class(Bad way)
-
-MorseMNE class to use function of MNE-python,  
-which is Great package to analyze EEG/MEG.  
-It is same as Morse class except cwt but  
-if you run cwt, it uses mne.time_frequency.tfr.cwt to run cwt.  
-
-But it is not recommended, because mne.time_frequency.tfr.cwt needs  
-wavelet which is 'not Fourier transformed'.  
-Basically, GMW is a wavelet which is originally  
-'Fourier transformed wavelet' and so, you need to run  
-InverseFourier transform before you perform CWT.  
-I think, this ugly class is disgusting.  
-
-By the way, there is a formula of Morlet wavelet which is Fourier transformed.  
-And so, I think, it may be better to use the formula  
-even if you use Morlet Wavelet.  
+## power
+Same as CWT, but returns absolute value.  
 
 ## Baseline Class
 
-NinWavelets supports baseline correction.
-
-```python
-def __init__(self, wave: Array, sfreq: float,
-             start: float, stop: float) -> None:
-```
-
-You need to import Baseline.
-In this case, wave was read as 'wave'.
+NinWavelets supports baseline correction.  
+You need to import Baseline.  
+In this case, wave was read as 'wave'.  
 
 ```python
 from ninwavelets import Baseline
@@ -390,31 +380,11 @@ There are these methods.
 
 
 
-## NinWavelets for MNE
-
-ninwavelets.EpochsWavelet is a class for Epochs class of mne.
-
-```python
-from ninwavelets import EpochsWavelet, Morse, plot_tf
-from mne import read_epochs
-
-fname = 'hoge_epo.fif'
-epochs = read_epochs(fname)
-morse = Morse()
-result = EpochsWavelet(epochs, morse).power(range(1, 100))
-plot_tf(result)
-```
-
-At first, make instance of wavelets(Morse, Morlet and so on).
-Then, make EpochsWavelet class.
-This has methods named cwt, power and itc.
-plot_tf is a function to plot numpy array.
-
 ## WaveletBase Class
-Super class of wavelets.
-You can inherit this class and make new wavelets.
+Super class of wavelets.  
+You can inherit this class and make new wavelets.  
 
-After inherit this, you can edit these methods.  
+After inherit this, you should edit these methods.  
 
 - BaseWavelet.formula
 - BaseWavelet.trans_formula
@@ -423,9 +393,9 @@ After inherit this, you can edit these methods.
 - BaseWavelet.cp_trans_formula
 
 At first, you need to overwrite them.  
-They needs to written by numpy or cupy.  
+They needs to be written by numpy or cupy code.  
 Cupy version should start with 'cp'.  
-These methods are used in the class, and bothering procedures are done.
+By inheriting, ninwavelet becomes scalable.  
 
 ## Way to inherit
 
@@ -516,50 +486,45 @@ class Morlet(WaveletBase):
 All you should do is write formula.  
 The formulas may be written in mathmatical papers! ;)  
 
-## Perfomance of wavelet transform
-Optionally, you can write code for cupy.  
-If you want to use cupy, write cp version and name it like below.
+# Advantages and Limitations
 
-- self.cp_trans_formula
-- self.cp_formula
-  
-From version 0.0.3, It became fast.  
+## Speed
+From version 0.0.3, It became extremely fast.  
 
 I performed benchmark test by my NotePC  
 'Dell G3 15-3579r' with Intel corei7(4.1Ghz 6core) and Geforce GTX1050.  
+(Turbo boost is off)  
 
-version 0.0.2
-One morse wavelet transform
-Sampling freq: 1000
-| Length | back ground | CWT time |
-|--------|-------------|----------|
-| 1sec   | cupy        | 1.28sec  |
-| 1sec   | numpy       | 0.872sec |
-| 50sec  | cupy        | 7.25sec  |
-| 50sec  | numpy       | 15.9sec  |
-
-version 0.1.0
+ninwavelet version 0.1.0
 50 morse wavelet transform
 Sampling freq: 1000
+1~1000Hz
+
 | Length | back ground | CWT time |
 |--------|-------------|----------|
-| 1sec   | cupy        | 1.39sec  |
-| 1sec   | numpy       | 1.29sec  |
-| 50sec  | cupy        | 2.04sec  |
-| 50sec  | numpy       | 72.6sec  |
+| 1sec   | cupy        | 2.32sec  |
+| 1sec   | numpy       | 2.29sec  |
+| 50sec  | cupy        | 3.2sec   |
+| 50sec  | numpy       | 134sec   |
 
+I do not want to fight, and so, I do not write about other packages.  
+But when I tested, ninwavelets seemd to be extremely faster than other packages.  
 
-# Advantages and Limitations
+Did you think ninwavelet based on cuda seems to be extremely fast?  
+**It is not true every time.** Throwing data into GPU takes much time.  
+But when I compare it to other packages, it seems to be extremely fast even if numpy backend was used.  
+And so, I think, ninwavelet is totally, extremely fast.  
+Ninwavelets is much more simple now, and so,  
+perhaps, it has less functions than other packages.  
 
 ## Method
 
-Some mathmatician say, DFT is not good way.  
-We have no good method to perform Fourier transform by digital computer.  
+Some mathmaticians may say, DFT is not precise way.  
+But we have no good method to perform Fourier transform by digital computer.  
 Method of convolve may be good way for Wavelet transform.  
 But GMW needs Frourier transform.  
 Further more, convolving needs long long loooong time.  
-And so, convolving method is useless.  
-It is not good for Morlet wavelet too. There may be some methods.  
+And so, DFT is needed. There may be some methods.  
 
 **1**
 
@@ -575,27 +540,19 @@ iFFT(FFT(wave) * FFT(wavelet))  # Fast, and widely used. But not good.
 
 **3**
 
-```
+``
 iFFT(FFT(wave) * FFTed_wavelet)  # Better and faster than 2.
 ```
 
-I adopted method 3. Not only GMW, but also Morlet wavelet will be performed by 3.
+I adopted method 3 as Normal mode. Not only GMW, but also Morlet wavelet transform will be performed by 3.
 
-## It is just my hobby(Critical limitation!)
+## It is just my hobby
 This project is just my hobby, and I am not an engineer or scholar, just a nurd.  
-I was said, "It is impossible for you to write reliable code of Wavelet Transform".  
-And so, there must be lots of bugs and IT IS USELESS.  
-**You should not use this package for work!**  
-(In fact, this package is useful "for me".)  
+If you cannot believe a nurd without licence of PHD or python engineer, just ignore it.  
 
 # Contribution
-I am glad to receive contribution!  
+I am glad to receive contribution.  
 I want to hear constructive oppinions, if I could.  
-
-But, I cannot receive such contribution like...  
-
-- Delete whole of this repository to delete bugs!
-- I am a PHD, and so, just change the authors name and make it reliable!
 
 # Licence
 Copyright (c) 2020 Forest Segne
@@ -634,4 +591,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         * [x] MIT licence.
 - [ ] CUPY related limitation
     + [ ] convolve is not allowed in cupy 7.6
-        * [ ] I am waiting, but it seems to be needless.
+- [x] Logging
+- [ ] Bug fix
+    + Endless!
