@@ -77,8 +77,7 @@ pip install mne
 
 # Purpose and background
 At first, this package was written to perform GMW on mne python.  
-But I wrote CWT.  
-Because GMW can skip one inverse FFT.  
+But I wrote CWT. Because GMW can skip one inverse FFT.  
 Now it has own CWT method, which can skip one inverse FFT.  
 And I noticed, it is good for Morlet Wavelet too.  
 
@@ -140,7 +139,7 @@ These are results from my test code.
 
 ![cwt](img/cwt.png)
 
-# Mode of wavelets
+# Modes of wavelets
 This package has some modes to calculate CWT.  
 You can use them like this.  
 
@@ -156,6 +155,7 @@ set_mode method retuns it self ;).
 | Normal   | Easy to understand. May be precise for Morlet. |
 | Fast     | Very fast, may be best for GMW and Morlet.     |
 | Convolve | Just slow. Sloooooooow!                        |
+| Reverse  | Do not use this.                               |
 
 
 Wrighting in english may not be easy to understand.  
@@ -205,12 +205,12 @@ ninwavelet try to perform inverseFFT before convolving.
 
 
 ## About modes
-Normal mode is easy to understand, can use cuda, but slower than Fast mode.  
+Normal mode is easy to understand, can use cuda, but a little slower than Fast mode.  
 Fast mode is fast, may be more precise than Normal, and can use cuda.  
-Convolve mode may too heavy and not good method for GMW but it may be good for Haar.
+Convolve mode may too heavy and not good method for GMW but it may be most precise for Morlet.
 Reverse mode is ugly way and just for debugging.  
 
-But, not all the wavelets have formula.  
+Not all the wavelets have formula.  
 For example, I do not know the formula of raw GMW.  
 (Generally, GMW is calculated by inverse fourier transform.)
 
@@ -223,7 +223,7 @@ morlet.set_mode(WaveletMode.Convolve)
 transformed = morlet.power(wave)
 ```
 
-But, I think, CWTMode should be set properly when the class is inherited.  
+CWTMode should be set properly when the class is inherited.  
 
 # Reference
 ## WaveletClasses
@@ -295,6 +295,7 @@ When you perform CWT, ninwavelets can select best way,
 and the best way do not use raw wavelet in some cases.  
 For example, GMW with sfreq=1000, freq=3 returnes bad wave.  
 If you want good wave, you must set 'real_wave_length' at constructor.  
+When it performs CWT, real_wave_length will be set properly.  
 
 Returns  
 MorseWavelet: list of np.ndarray  
@@ -305,10 +306,11 @@ MorseWavelet: list of np.ndarray
 make_fft_waves(self, total: float, one: float,
                freqs: Iterable) -> Iterator:
 ```
-Make Fourier transformed Wavelet.
-If the wavelet is originally Frourier transformed wavelet,
-it just calculate original formula.
-If wavelet is originally not Fourier transformed wavelet,
+
+Make Fourier transformed Wavelet.  
+If the wavelet is originally Frourier transformed wavelet  
+and it has 'fft_formula', it just calculate original formula.  
+If wavelet is originally not Fourier transformed wavelet,  
 it run FFT to make them.  
 
 ### cwt
@@ -512,8 +514,9 @@ But when I tested, ninwavelets seemd to be extremely faster than other packages.
 
 Did you think ninwavelet based on cuda seems to be extremely fast?  
 **It is not true every time.** Throwing data into GPU takes much time.  
-But when I compare it to other packages, it seems to be extremely fast even if numpy backend was used.  
-And so, I think, ninwavelet is totally, extremely fast.  
+But when I compare it to other packages, it still seems to be extremely faster  
+even if numpy backend was used.  
+And so, I think, ninwavelet is totally, fast.  
 Ninwavelets is much more simple now, and so,  
 perhaps, it has less functions than other packages.  
 
