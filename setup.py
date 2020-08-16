@@ -6,8 +6,9 @@ setup(
     install_requires=['scipy', 'numpy'],
     package_dir={'ninwavelets': 'ninwavelets'},
     packages=find_packages(),
-    description='Wavelets package',
-    long_description='''Analystic wavelets package, based on cuda.
+    description='Very fast wavelet transform package',
+    long_description='''Brand new analystic wavelets package, based on numpy and cupy.
+It may be extremely fast in some cases.
 It can perform various wavelets(Morlet, GMW, Shannon).''',
     url='https://github.com/uesseu/ninwavelets',
     author='Forest Segne',
