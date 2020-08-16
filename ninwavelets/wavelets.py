@@ -55,9 +55,7 @@ class Morse(WaveletBase):
         self.help = '''This is inverse Fourier transformed MorseWavelet.
 Originally, Generalized Morse wavelet is
 Frourier transformed wave.
-It should be used as it is Fourier transformed data.
-But, you can use it in the same way as'
-MorletWavelet by IFFT.'''
+'''
 
     def cp_trans_formula(self, freqs: cp.ndarray,
                          freq: float = 1.) -> cp.ndarray:
@@ -307,5 +305,8 @@ class Haar(WaveletBase):
         self.cuda = cuda
 
     def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
-        timeline = np.where(0. < timeline <= 1., 1, 0)
+        print(timeline[0])
+        timeline = np.where(np.abs(timeline) >= 1 / freq, timeline, 0)
+        timeline = np.where(timeline > 0., 1, timeline)
+        timeline = np.where(timeline < 0., -1, timeline)
         return timeline - np.flip(timeline)

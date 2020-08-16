@@ -9,11 +9,15 @@ from mne.time_frequency.tfr import morlet, cwt
 from ninwavelets import (Morse, MorseMNE, Morlet, CWTMode,
                          Haar, plot_tf, MexicanHat, Shannon, Baseline)
 from mne.io import Raw
+from mne import verbose
 import gc
 from time import time
 from sys import argv
-from logging import getLogger, INFO, basicConfig
+from logging import getLogger, INFO, WARNING, basicConfig, ERROR, CRITICAL
 from functools import partial
+from scipy import signal
+from contextlib import redirect_stdout
+import os
 
 basicConfig(level=INFO)
 log = getLogger()
@@ -54,7 +58,7 @@ def test3d() -> None:
     morse_obj = Morse(sfreq, 17.5, 3)
     morse = morse_obj.make_wavelet(hz)
     nm = Morlet(sfreq)
-    nm.mode = CWT.Fast
+    nm.mode = CWTMode.Normal
     nin_morlet = nm.make_wavelet(hz)
 
     half_morse = morse.shape[0] / 2
@@ -73,6 +77,7 @@ def test3d() -> None:
     ax.plot(morlet_time, mm, label='MNE Morlet')
     ax.plot(morlet_time, mm.imag, label='MNE Morlet imag')
     ax.plot(morlet_time, go, label='Gabor Wavelet')
+    ax.plot(Haar(1000).make_wavelet(hz), label='Haar Wavelet')
 
     ax1 = fig.add_subplot(212, projection='3d')
     ax1.scatter3D(morse.real, morse_time, morse.imag, label='morse')
@@ -100,6 +105,8 @@ def plot_sin_fft() -> None:
 
 
 def cwt_test(cuda: bool = False, show: bool = False) -> None:
+    min_freq = 30
+    max_freq = 300
     sin = make_example(1, cuda)
     if cuda:
         sin = cp.asarray(sin)
@@ -107,26 +114,23 @@ def cwt_test(cuda: bool = False, show: bool = False) -> None:
     ncp = cp if cuda else np
     log.info('''Fast mode test for GMW''')
     morse = Morse(cuda=cuda, sfreq=1000)
-    result_morse = morse.power(sin, ncp.arange(1, 1000, 1))
+    result_morse = morse.power(sin, ncp.arange(min_freq, max_freq, 1))
 
     log.info('''Change to Normal mode test for GMW only for numpy''')
     if not cuda:
         morse.mode = CWTMode.Normal
     t = time()
-    morse.power(sin, ncp.arange(1, 1000, 1), reuse=False)
-    print(time() - t)
-    print(time() - t)
+    morse.power(sin, ncp.arange(min_freq, max_freq, 1), reuse=False)
 
     log.info('''Normal mode test
 Normal mode is only for numpy
 Because cupy 7.6.0 has no method named convolve''')
     nin_morlet = Morlet(cuda=False, sfreq=1000)
-    if not cuda:
-        nin_morlet.mode = CWTMode.Normal
-    result_morlet = nin_morlet.power(cp.asnumpy(sin), np.arange(1, 1000, 1))
+    nin_morlet.mode = CWTMode.Convolve
+    result_morlet = nin_morlet.power(cp.asnumpy(sin), np.arange(min_freq, max_freq, 1))
     if cuda:
         sin = cp.asnumpy(sin)
-        nin_morlet = morlet(1000, np.arange(1, 1000, 1), zero_mean=True)[0]
+        nin_morlet = morlet(1000, np.arange(min_freq, max_freq, 1), zero_mean=True)[0]
         # morlet = Morlet(cuda=False)
         # morlet.mode = CWTMode.Fast
     else:
@@ -134,19 +138,23 @@ Because cupy 7.6.0 has no method named convolve''')
         # morlet = Morlet(cuda=False)
     t = time()
     result_mne = cwt(np.array([sin]),
-                     morlet(1000, np.arange(1, 1000, 1)))[0] ** 2
-    print(time() - t)
+                     morlet(1000, np.arange(min_freq, max_freq, 1)),
+                     use_fft=False)[0] ** 2
+
     if show:
+        # plt.plot(nin_morlet.wavelets[15])
+        plt.show()
         if cuda:
             result_morse = cp.asnumpy(result_morse)
             result_morlet = cp.asnumpy(result_morlet)
         ax1 = plt.subplot(1, 3, 1)
         ax2 = plt.subplot(1, 3, 2)
         ax3 = plt.subplot(1, 3, 3)
+        vmin = 0
         vmax = 10
-        ax1.imshow(np.abs(result_morse), cmap='RdBu_r', vmax=vmax)
-        ax2.imshow(np.abs(result_morlet), cmap='RdBu_r', vmax=vmax)
-        ax3.imshow(np.abs(result_mne), cmap='RdBu_r', vmax=vmax)
+        ax1.imshow(np.abs(result_morse), cmap='RdBu_r', vmin=vmin, vmax=vmax)
+        ax2.imshow(np.abs(result_morlet), cmap='RdBu_r', vmin=vmin, vmax=vmax)
+        ax3.imshow(np.abs(result_mne), cmap='RdBu_r', vmin=vmin, vmax=vmax)
         ax1.invert_yaxis()
         ax2.invert_yaxis()
         ax3.invert_yaxis()
@@ -154,15 +162,15 @@ Because cupy 7.6.0 has no method named convolve''')
         ax2.set_title('Morlet')
         ax3.set_title('MNE')
         plt.show()
-    print(np.max(np.abs(result_morse)))
-    print(np.max(np.abs(result_morlet)))
-    print(np.max(np.abs(result_mne)))
-    print(np.abs(result_morse).mean())
-    print(np.abs(result_morlet).mean())
-    print(np.abs(result_mne).mean())
+    print(f'Morse max if {np.max(np.abs(result_morse))}')
+    print(f'Morlet max is {np.max(np.abs(result_morlet))}')
+    print(f'MNE max is {np.max(np.abs(result_mne))}')
+    print(f'Morse mean is {np.abs(result_morse).mean()}')
+    print(f'Morlet mean is {np.abs(result_morlet).mean()}')
+    print(f'MNE mean is {np.abs(result_mne).mean()}')
     # result_morse = morse.power(sin, reuse=True)
 
-    plot_tf(result_morse)
+    plot_tf(result_morlet)
     # plt.show()
 
 
@@ -242,13 +250,55 @@ def eeg(cuda: bool) -> None:
 
 
 def speed_test(i: int,cuda: bool) -> None:
+    length = 1
+    repeat = 50
     t = time()
-    sin = make_example(50, cuda)
+    sin = make_example(length, cuda)
     morse = Morse(cuda=cuda, sfreq=1000)
     ncp = cp if cuda else np
-    for n in range(50):
-        result_morse = morse.power(sin, ncp.arange(1, 1000, 1))
-    print(time() - t)
+    wv = make_example(length, False)
+    wv_mne = np.array([make_example(length, False)])
+    freqs = np.arange(1, 1000, 1)
+    c_freqs = ncp.arange(1, 1000, 1)
+
+
+    # #====================
+    # # MNE
+    # #====================
+    # t = time()
+    # mne_morlet = morlet(1000, np.arange(1, 1000, 1))
+    # for n in range(repeat):
+    #     result_mne = cwt(wv_mne, mne_morlet)[0] ** 2
+    # print(f'MNE morlet {(time() - t)}')
+
+    #====================
+    # PyWavelet
+    #====================
+    t = time()
+    import pywt
+    widths = np.arange(1, 1000, 1)
+    for n in range(repeat):
+        cwtmatr, freqs = pywt.cwt(wv, widths, 'cmor')
+        np.abs(cwtmatr) ** 2
+    print(f'PyWavelet morlet {time() - t}')
+
+    #====================
+    # NinWavelet
+    #====================
+    t = time()
+    for n in range(repeat):
+        result_morse = morse.power(sin, c_freqs) ** 2
+    print(f'Ninwavelet Morse {time() - t}')
+
+    #====================
+    # SWAN
+    #====================
+    from swan import pycwt
+    t = time()
+    for n in range(repeat):
+        r = np.abs(pycwt.cwt_f(wv, freqs, 1000)) ** 2
+
+    print(f'Swan morlet {time() - t}')
 
 
 if __name__ == '__main__':
