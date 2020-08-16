@@ -41,8 +41,14 @@ Please see Advantages and Limitations.
 
 # Install
 
+From github account.
 ```bash
 pip install git+https://github.com/uesseu/ninwavelets
+```
+
+From pypi.
+```bash
+pip install ninwavelets
 ```
 
 # Dependency
