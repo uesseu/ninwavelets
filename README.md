@@ -29,15 +29,13 @@ Please see Advantages and Limitations.
     + May be more(It is easy to scale!)
 - Skipping one FFT when performing CWT.
     + May be better and faster if you use FFT method.
-- Cuda
-    + It may be extremely faster!
-- Compatibility
-    + You can use it with mne-python.(Sensor based only...)
-    + Numpy and Cupy is available.
+- Speed
+    + When you use cuda and process longwave, may be extremely faster!
+    + Even if you use numpy, it is very very fast!
 - Reliability
-    + Brand new project, and no achivement...
-    + There may be bugs.
-    + Do not rely on it! Read the source code!
+    + Being brand new project, it has no achivement...
+    + There may be lots of bugs.
+    + Do not rely on it! Read the source code! Test by your self!
 - In heavily debelopment
     + Destructive change may performed.
 
@@ -67,12 +65,27 @@ pip install cupy
 Ninwavelets with cuda is extremely fast if you process long wave,  
 like my EEG power example.  
 
-Optionally, if you want to process EEG/MEG, you can use this.  
 
-- mne
+# Usage
+- At first, import wavelets and import numpy or cupy.
+- Ninwavelets can use cuda, and so, switch numpy or cupy.
+- The wave must be numpy or cupy data.
+  + If you want to use cuda, prepare cupy data! It does not transform!
+- Make instance of wavelet
+- Make frequency instance as numpy, cupy or range.
+  + If you did not make it, ninwavelets may becomes extremely slower!
+- Perform cwt.
 
-```bash
-pip install mne
+
+```python
+import cupy as cp
+from ninwavelets import Morse
+freqs = cp.array(20, 100, 1)
+
+wave = cp.sin(cp.arange(0, 1000, 1))
+morse = Morse(1000)
+morse.cwt(wave, freqs)
+# morse.cwt(wave, cp.arange(20, 100, 1))   is slow!
 ```
 
 # Purpose and background
@@ -80,8 +93,9 @@ At first, this package was written to perform GMW on mne python.
 But I wrote CWT. Because GMW can skip one inverse FFT.  
 Now it has own CWT method, which can skip one inverse FFT.  
 And I noticed, it is good for Morlet Wavelet too.  
+The result resembles that of mne python.  
 
-It is a brand new project, and under heavily development(On my Sunday).  
+This is a brand new project, and under heavily development(Mainly on my Sunday).  
 Destructive changes may be made.  
 
 # Exsamples
@@ -509,16 +523,27 @@ Sampling freq: 1000
 | 50sec  | cupy        | 3.2sec   |
 | 50sec  | numpy       | 134sec   |
 
-I do not want to fight, and so, I do not write about other packages.  
-But when I tested, ninwavelets seemd to be extremely faster than other packages.  
+I do not write about other packages.  
+But when I tested, ninwavelets seemd to be extremely faster.  
 
 Did you think ninwavelet based on cuda seems to be extremely fast?  
 **It is not true every time.** Throwing data into GPU takes much time.  
-But when I compare it to other packages, it still seems to be extremely faster  
+But when I compare it to other packages, it still seems to be faster  
 even if numpy backend was used.  
-And so, I think, ninwavelet is totally, fast.  
-Ninwavelets is much more simple now, and so,  
+And so, I think, ninwavelet is totally, very very fast.  
+Ninwavelets is much more simple package now, and so,  
 perhaps, it has less functions than other packages.  
+
+## Why is it so fast?
+
+You may think, this package performs strange calculation.  
+But what I have done is just adjusting bottle necks.  
+Coding wavelet transform itself is not difficult.  
+But there is some way to write fast code using numpy or cupy.  
+Fast code should skip no purpose calculation.  
+This package skips calculation as much as possible.  
+Furthur more, transfering data into GPU takes much time.  
+I just adjusted the bottle necks carefully.  
 
 ## Method
 
