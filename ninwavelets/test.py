@@ -281,24 +281,25 @@ def speed_test(i: int,cuda: bool) -> None:
     mne_time = time() - t
     print(f'MNE morlet {mne_time}')
 
-    #====================
-    # PyWavelet
-    #====================
-    import pywt
-    t = time()
-    for n in range(repeat):
-        cwtmatr, result_freqs = pywt.cwt(wv, freqs, 'cmor')
-        np.abs(cwtmatr) ** 2
-    pywavelet_time = time() - t
-    print(f'PyWavelet morlet {pywavelet_time}')
+    # #====================
+    # # PyWavelet
+    # #====================
+    # import pywt
+    # t = time()
+    # for n in range(repeat):
+    #     cwtmatr, result_freqs = pywt.cwt(wv, freqs, 'cmor')
+    #     np.abs(cwtmatr) ** 2
+    # pywavelet_time = time() - t
+    # print(f'PyWavelet morlet {pywavelet_time}')
+    pywavelet_time = 0
 
     #====================
     # NinWavelet
     #====================
     t = time()
-    morse = Morse(cuda=cuda, sfreq=1000)
+    nin_morlet = Morlet(cuda=cuda, sfreq=1000)
     for n in range(repeat):
-        result_morlet = morlet.power(sin, c_freqs)
+        result_morlet = nin_morlet.power(sin, c_freqs)
     ninwavelet_time = time() - t
     print(f'Ninwavelets morlet {ninwavelet_time}')
 
@@ -315,7 +316,7 @@ def speed_test(i: int,cuda: bool) -> None:
 
     plt.bar(np.arange(0, 5, 1),
             np.array([pywavelet_time, scipy_time, mne_time, swan_time, ninwavelet_time]),
-            ['PyWavelet', 'Scipy', 'MNE', 'Swan', 'Ninwavelets'])
+            tick_label = ['PyWavelet', 'Scipy', 'MNE', 'Swan', 'Ninwavelets'])
     plt.show()
 
 
