@@ -541,8 +541,6 @@ Converting to numpy is too slow. Exit.''')
         -------
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
-        print(freqs is self._freqs)
-        print(id(freqs))
         if (not reuse) or (not hasattr(self, '_pad_fft_wavelets')):
             self.make_fft_wavelets(freqs, wave.shape[0] / self.sfreq)
             pad_wave = partial(pad_to, wave_to=wave, cuda=self.cuda)

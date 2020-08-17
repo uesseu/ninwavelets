@@ -1,10 +1,11 @@
-python='python3'
-server='testpypi'
+server='pypi'
 
 all:
-	$(python) setup.py sdist bdist_wheel
+	python3 setup.py sdist bdist_wheel
+
 upload:
-	$(python) -m twine upload --repository $(server) dist/*
+	python3 -m twine upload --repository $(server) dist/*
+
 setup:
-	$(python) -m pip install --user --upgrade setuptools wheel
-	$(python) -m pip install --user --upgrade twine
+	python3 -m pip install --user --upgrade setuptools wheel
+	python3 -m pip install --user --upgrade twine

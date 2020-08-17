@@ -119,7 +119,7 @@ class Morlet(WaveletBase):
 
     Returns
     -------
-    As constructor, Morse instance its self.
+    As constructor, Morlet instance its self.
     '''
 
     def __init__(self, sfreq: float = 1000, sigma: float = 7.,

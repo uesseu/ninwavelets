@@ -6,7 +6,7 @@ from multiprocessing import Pool
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft, ifft
 from mne.time_frequency.tfr import morlet, cwt
-from ninwavelets import (Morse, MorseMNE, Morlet, CWTMode,
+from ninwavelets import (Morse, Morlet, CWTMode,
                          Haar, plot_tf, MexicanHat, Shannon, Baseline)
 from mne.io import Raw
 from mne import verbose
@@ -19,7 +19,7 @@ from scipy import signal
 from contextlib import redirect_stdout
 import os
 
-basicConfig(level=INFO)
+basicConfig(level=WARNING)
 log = getLogger()
 
 
@@ -106,8 +106,8 @@ def plot_sin_fft() -> None:
 
 def cwt_test(cuda: bool = False, show: bool = False) -> None:
     min_freq = 30
-    max_freq = 300
-    sin = make_example(1, cuda)
+    max_freq = 500
+    sin = make_example(4, cuda)
     if cuda:
         sin = cp.asarray(sin)
 
@@ -251,54 +251,72 @@ def eeg(cuda: bool) -> None:
 
 def speed_test(i: int,cuda: bool) -> None:
     length = 1
-    repeat = 50
+    repeat = 100
     t = time()
     sin = make_example(length, cuda)
-    morse = Morse(cuda=cuda, sfreq=1000)
     ncp = cp if cuda else np
     wv = make_example(length, False)
     wv_mne = np.array([make_example(length, False)])
-    freqs = np.arange(1, 1000, 1)
-    c_freqs = ncp.arange(1, 1000, 1)
+    freqs = np.arange(30, 500, 1)
+    c_freqs = ncp.arange(30, 500, 1)
 
 
-    # #====================
-    # # MNE
-    # #====================
-    # t = time()
-    # mne_morlet = morlet(1000, np.arange(1, 1000, 1))
-    # for n in range(repeat):
-    #     result_mne = cwt(wv_mne, mne_morlet)[0] ** 2
-    # print(f'MNE morlet {(time() - t)}')
+    #====================
+    # Scipy
+    #====================
+    from scipy import signal
+    t = time()
+    for n in range(repeat):
+        result_sci = np.abs(signal.cwt(wv, signal.morlet2, freqs)) ** 2
+    scipy_time = time() - t
+    print(f'Scipy morlet {scipy_time}')
+
+    #====================
+    # MNE
+    #====================
+    t = time()
+    mne_morlet = morlet(1000, freqs)
+    for n in range(repeat):
+        result_mne = np.abs(cwt(wv_mne, mne_morlet)[0]) ** 2
+    mne_time = time() - t
+    print(f'MNE morlet {mne_time}')
 
     #====================
     # PyWavelet
     #====================
-    t = time()
     import pywt
-    widths = np.arange(1, 1000, 1)
+    t = time()
     for n in range(repeat):
-        cwtmatr, freqs = pywt.cwt(wv, widths, 'cmor')
+        cwtmatr, result_freqs = pywt.cwt(wv, freqs, 'cmor')
         np.abs(cwtmatr) ** 2
-    print(f'PyWavelet morlet {time() - t}')
+    pywavelet_time = time() - t
+    print(f'PyWavelet morlet {pywavelet_time}')
 
     #====================
     # NinWavelet
     #====================
     t = time()
+    morse = Morse(cuda=cuda, sfreq=1000)
     for n in range(repeat):
-        result_morse = morse.power(sin, c_freqs) ** 2
-    print(f'Ninwavelet Morse {time() - t}')
+        result_morlet = morlet.power(sin, c_freqs)
+    ninwavelet_time = time() - t
+    print(f'Ninwavelets morlet {ninwavelet_time}')
 
     #====================
     # SWAN
     #====================
     from swan import pycwt
+    swan_morlet = pycwt.Morlet()
     t = time()
     for n in range(repeat):
-        r = np.abs(pycwt.cwt_f(wv, freqs, 1000)) ** 2
+        r = np.abs(pycwt.cwt_f(wv, freqs, 1000, swan_morlet)) ** 2
+    swan_time = time() - t
+    print(f'Swan morlet {swan_time}')
 
-    print(f'Swan morlet {time() - t}')
+    plt.bar(np.arange(0, 5, 1),
+            np.array([pywavelet_time, scipy_time, mne_time, swan_time, ninwavelet_time]),
+            ['PyWavelet', 'Scipy', 'MNE', 'Swan', 'Ninwavelets'])
+    plt.show()
 
 
 if __name__ == '__main__':
