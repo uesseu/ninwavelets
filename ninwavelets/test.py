@@ -120,7 +120,7 @@ def cwt_test(cuda: bool = False, show: bool = False) -> None:
     if not cuda:
         morse.mode = CWTMode.Normal
     t = time()
-    morse.power(sin, ncp.arange(min_freq, max_freq, 1), reuse=False)
+    morse.power(sin, ncp.arange(min_freq, max_freq, 1))
 
     log.info('''Normal mode test
 Normal mode is only for numpy
@@ -252,13 +252,25 @@ def eeg(cuda: bool) -> None:
 def speed_test(i: int,cuda: bool) -> None:
     length = 1
     repeat = 100
+    reg = 10
     t = time()
     sin = make_example(length, cuda)
     ncp = cp if cuda else np
     wv = make_example(length, False)
     wv_mne = np.array([make_example(length, False)])
+    # freqs = np.arange(30, 500, 1)
+    # c_freqs = ncp.arange(30, 500, 1)
     freqs = np.arange(30, 500, 1)
-    c_freqs = ncp.arange(30, 500, 1)
+    c_freqs = [ncp.arange(30, 500, 1),
+        ncp.arange(30, 500, 1),
+        ncp.arange(30, 500, 1),
+        ncp.arange(30, 500, 1),
+        ncp.arange(30, 500, 1),
+        ncp.arange(30, 500, 1),
+        ncp.arange(30, 500, 1),
+        ncp.arange(30, 500, 1),
+        ncp.arange(30, 500, 1),
+        ncp.arange(30, 500, 1)]
 
 
     #====================
@@ -286,19 +298,21 @@ def speed_test(i: int,cuda: bool) -> None:
     #====================
     import pywt
     t = time()
-    for n in range(repeat):
-        cwtmatr, result_freqs = pywt.cwt(wv, freqs, 'cmor')
+    for n in range(int(repeat/10)):
+        cwtmatr, result_freqs = pywt.cwt(wv, freqs, 'cmor1.5-1.0')
         np.abs(cwtmatr) ** 2
-    pywavelet_time = time() - t
+    pywavelet_time = (time() - t) * 10
     print(f'PyWavelet morlet {pywavelet_time}')
 
     #====================
     # NinWavelet
     #====================
     t = time()
-    morse = Morse(cuda=cuda, sfreq=1000)
-    for n in range(repeat):
-        result_morlet = morlet.power(sin, c_freqs)
+    nin_morlet = Morlet(cuda=cuda, sfreq=1000)
+    for n in range(reg):
+        for f in c_freqs:
+            result_morlet = nin_morlet.power(sin, f)
+            print(len(nin_morlet.stocks['fft'].keys()))
     ninwavelet_time = time() - t
     print(f'Ninwavelets morlet {ninwavelet_time}')
 
@@ -315,7 +329,7 @@ def speed_test(i: int,cuda: bool) -> None:
 
     plt.bar(np.arange(0, 5, 1),
             np.array([pywavelet_time, scipy_time, mne_time, swan_time, ninwavelet_time]),
-            ['PyWavelet', 'Scipy', 'MNE', 'Swan', 'Ninwavelets'])
+            tick_label=['PyWavelet', 'Scipy', 'MNE', 'Swan', 'Ninwavelets'])
     plt.show()
 
 

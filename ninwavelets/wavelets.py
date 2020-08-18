@@ -61,11 +61,11 @@ Frourier transformed wave.
                          freq: float = 1.) -> cp.ndarray:
         np_freqs = cp.asnumpy(freqs)
         step = cp.asarray(np.heaviside(np_freqs, np_freqs))
-        freqs = cp.asarray(freqs) / freq
-        wave = 2. * (step * freqs ** self.b *
+        freqs = freqs / freq
+        wave = 2. * (step * cp.power(freqs, self.b) *
                      cp.exp((self.b / self.r) *
                             (1.
-                             - freqs ** self.r)
+                             - cp.power(freqs, self.r))
                             ))
         return wave
 
@@ -150,8 +150,8 @@ class Morlet(WaveletBase):
 
     def cp_formula(self, timeline: cp.ndarray, freq: float = 1) -> np.ndarray:
         return (self.c * (cp.pi ** (-1 / 4))
-                * cp.e ** (-cp.square(timeline) / 2)
-                * (cp.e ** (self.sigma * 1j * timeline) - self.k))
+                * cp.exp(-cp.square(timeline) / 2)
+                * (cp.exp(self.sigma * 1j * timeline) - self.k))
 
     def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
         return (self.c * np.float_power(np.pi, (-1 / 4))
@@ -159,52 +159,8 @@ class Morlet(WaveletBase):
                 * (np.exp(self.sigma * 1j * timeline) - self.k))
 
     def peak_freq(self, freq: float) -> float:
-        return cast(float, self.sigma / (1. - np.exp(-self.sigma * freq)))
+        return float( self.sigma / (1. - np.exp(-self.sigma * freq)))
 
-
-class MorseMNE(Morse):
-    '''
-    MorseWavelets for mne.
-    It uses GMW with mne function.
-    But, it use iFFT and FFT to no purpose.
-    This ugly class is disgusting and depricated.
-    '''
-
-    def __init__(self, sfreq: float = 1000, b: float = 17.5, r: float = 3,
-                 real_wave_length: float = 1., cuda: bool = False) -> None:
-        super(MorseMNE, self).__init__(sfreq, real_wave_length, cuda)
-        self.r: float = r
-        self.b: float = b
-        self.mode = CWTMode.Fast
-        self.help = '''This is inverse Fourier transformed MorseWavelet.
-Originally, Generalized Morse wavelet is
-Frourier transformed wave.
-It should be used as it is Fourier transformed data.
-But, you can use it in the same way as'
-MorletWavelet by IFFT.'''
-
-    def cwt(self, wave: np.ndarray,
-            freqs: Union[List[float], range, np.ndarray],
-            use_fft: bool = True, mode: str = 'same',
-            decim: float = 1) -> np.ndarray:
-        from mne.time_frequency import tfr
-        '''
-        Run cwt of mne-python.
-        Because of use of IFFT before FFT to the same wave,
-        this ugly method is disgusting.
-
-        Parameters
-        ----------
-        freqs: float | Frequencies. Before use this, please run plot.
-
-        Returns
-        -------
-        Result of cwt. Complex np.ndarray.
-        '''
-        return tfr.cwt(wave,
-                       tuple(self.make_wavelets(range(1, 100))),
-                       use_fft=use_fft,
-                       mode=mode, decim=decim).mean(axis=0)
 
 
 class MexicanHat(WaveletBase):

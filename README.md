@@ -510,8 +510,11 @@ The formulas may be written in mathmatical papers! ;)
 
 # Advantages and Limitations
 
-## Speed
+## Benchmark
 From version 0.0.3, It became extremely fast.  
+**But it is not so fast if you write in wrong way.**  
+**It is fast only when performing cwt.**  
+See 'Fast coding of ninwavelets' to write fast code.  
 
 I performed benchmark test by my NotePC  
 'Dell G3 15-3579r' with Intel corei7(4.1Ghz 6core) and Geforce GTX1050.  
@@ -539,6 +542,28 @@ even if numpy backend was used.
 And so, I think, ninwavelet is totally, very very fast.  
 Ninwavelets is much more simple package now, and so,  
 perhaps, it has less functions than other packages.  
+
+## Fast coding of ninwavelets
+You should make a frequency variable.  
+Nin wavelets takes long time to make one wavelet.  
+It is fast only when performing cwt.  
+And so, it memorizes wavelets after cwt.  
+
+This is the bad example
+
+```python
+morse = Morse(1000)
+morse.cwt(wave, np.arange(1, 1000, 1))
+```
+
+This is the good example
+```python
+morse = Morse(1000)
+freqs = np.arange(1, 1000, 1)
+morse.cwt(wave, freqs)
+```
+
+Memorizing wavelets may takes big memory.  
 
 ## Why is it so fast?
 
