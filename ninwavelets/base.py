@@ -279,10 +279,27 @@ class WaveletBase:
             result.real = ncp.abs(result.real)
             return result
 
-    def make_fft_wavelets(self, freqs: Numbers,
-                          real_wave_length: float = 1.) -> List[Array]:
-        ''' Make list of FFTed wavelets.
-        Make Fourier transformed wavelet.
+    # def make_fft_wavelets(self, freqs: Numbers,
+    #                       real_wave_length: float = 1.) -> List[Array]:
+    #     ''' Make list of FFTed wavelets.
+    #     Make Fourier transformed wavelet.
+
+    #     Parameters
+    #     ----------
+    #     freq: float
+    #         Frequency of wavelet.
+
+    #     Returns
+    #     -------
+    #     np.ndarray[np.complex128, ndim=1]: FFTed Wavelet.
+    #     '''
+    #     logger.info('Making ffted wavelet.')
+    #     self.freq_dist = freqs[1] - freqs[0]
+    #     make_w = partial(self.make_fft_wavelet, real_length=real_wave_length)
+    #     self.fft_wavelets = list(map(make_w, freqs))
+    #     return self.fft_wavelets
+    def make_fft_wavelets(self, freqs: Array, real_length: float = 1.) -> Array:
+        ''' Make single FFTed wavelet.
 
         Parameters
         ----------
@@ -293,11 +310,28 @@ class WaveletBase:
         -------
         np.ndarray[np.complex128, ndim=1]: FFTed Wavelet.
         '''
-        logger.info('Making ffted wavelet.')
-        self.freq_dist = freqs[1] - freqs[0]
-        make_w = partial(self.make_fft_wavelet, real_length=real_wave_length)
-        self.fft_wavelets = list(map(make_w, freqs))
-        return self.fft_wavelets
+        ncp = cp if self.cuda else np
+        if freqs[0] == 0:
+            raise ZeroDivisionError
+        formula = self.cp_trans_formula if self.cuda else self.trans_formula
+        if self.mode in [CWTMode.Fast]:
+            # Make timeline
+            t = ncp.array([self._setup_trans_shape(real_length, real_length) for n in range(freqs.shape[0])])
+            # Make fft wavelets
+            many_freqs = ncp.tile(freqs, (t.shape[1], 1)).T
+            result = formula(t, many_freqs)
+            # Adjust norm
+            # divs = ncp.array([self.get_wavelet_norm(ncp.fft.ifft(r)) for r in result])
+            divs = ncp.array([self.get_wavelet_norm(ncp.fft.ifft(r)) for r in result])
+            result /= ncp.tile(divs, (result.shape[1], 1)).T
+            self.fft_wavelets = result
+            return result
+        else:
+            logger.info('Making ffted wavelet.')
+            self.freq_dist = freqs[1] - freqs[0]
+            make_w = partial(self.make_fft_wavelet, real_length=real_length)
+            self.fft_wavelets = list(map(make_w, freqs))
+            return self.fft_wavelets
 
     def formula(self, timeline: Array, freq: float) -> Array:
         ''' formula
