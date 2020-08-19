@@ -18,6 +18,8 @@ from functools import partial
 from scipy import signal
 from contextlib import redirect_stdout
 import os
+import seaborn as sns
+sns.set(font_scale=2)
 
 basicConfig(level=WARNING)
 log = getLogger()
@@ -249,28 +251,17 @@ def eeg(cuda: bool) -> None:
     plt.show()
 
 
-def speed_test(i: int,cuda: bool) -> None:
+def speed_test(i: int) -> None:
     length = 1
     repeat = 100
     reg = 10
     t = time()
-    sin = make_example(length, cuda)
-    ncp = cp if cuda else np
+    sin = make_example(length, False)
+    c_sin = make_example(length, True)
     wv = make_example(length, False)
     wv_mne = np.array([make_example(length, False)])
-    # freqs = np.arange(30, 500, 1)
-    # c_freqs = ncp.arange(30, 500, 1)
     freqs = np.arange(30, 500, 1)
-    c_freqs = [ncp.arange(30, 500, 1),
-        ncp.arange(30, 500, 1),
-        ncp.arange(30, 500, 1),
-        ncp.arange(30, 500, 1),
-        ncp.arange(30, 500, 1),
-        ncp.arange(30, 500, 1),
-        ncp.arange(30, 500, 1),
-        ncp.arange(30, 500, 1),
-        ncp.arange(30, 500, 1),
-        ncp.arange(30, 500, 1)]
+    c_freqs = cp.arange(30, 500, 1)
 
 
     #====================
@@ -308,14 +299,25 @@ def speed_test(i: int,cuda: bool) -> None:
     # NinWavelet
     #====================
     t = time()
-    nin_morlet = Morlet(cuda=cuda, sfreq=1000)
-    for n in range(reg):
-        for f in c_freqs:
-            result_morlet = nin_morlet.power(sin, f)
-            print(len(nin_morlet.stocks['fft'].keys()))
-    ninwavelet_time = time() - t
-    print(f'Ninwavelets morlet {ninwavelet_time}')
+    nin_morlet = Morlet(cuda=True, sfreq=1000)
+    for n in range(repeat):
+        result_morlet = nin_morlet.power(c_sin, c_freqs)
+    ninwavelet_time_cuda = time() - t
+    print(f'Ninwavelets cuda morlet {ninwavelet_time_cuda}')
 
+    t = time()
+    nin_morlet = Morlet(cuda=False, sfreq=1000)
+    for n in range(repeat):
+        result_morlet = nin_morlet.power(sin, np.arange(30, 500, 1))
+    ninwavelet_time_slow = time() - t
+    print(f'Ninwavelets slow morlet {ninwavelet_time_slow}')
+
+    t = time()
+    nin_morlet = Morlet(cuda=False, sfreq=1000)
+    for n in range(repeat):
+        result_morlet_cuda = nin_morlet.power(sin, freqs)
+    ninwavelet_time = time() - t
+    print(f'Ninwavelets numpy morlet {ninwavelet_time}')
     #====================
     # SWAN
     #====================
@@ -327,9 +329,9 @@ def speed_test(i: int,cuda: bool) -> None:
     swan_time = time() - t
     print(f'Swan morlet {swan_time}')
 
-    plt.bar(np.arange(0, 5, 1),
-            np.array([pywavelet_time, scipy_time, mne_time, swan_time, ninwavelet_time]),
-            tick_label=['PyWavelet', 'Scipy', 'MNE', 'Swan', 'Ninwavelets'])
+    plt.bar(np.arange(0, 7, 1),
+            1 / np.array([pywavelet_time, scipy_time, mne_time, swan_time, ninwavelet_time_slow, ninwavelet_time, ninwavelet_time_cuda]),
+            tick_label=['PyWavelet', 'Scipy', 'MNE', 'Swan', 'Ninwavelets\nSlow', 'Ninwavelets', 'Ninwavelets\nCuda'])
     plt.show()
 
 
@@ -355,7 +357,7 @@ if __name__ == '__main__':
             with Pool(6) as p:
                 p.map(partial(speed_test, cuda=cuda), range(8))
         else:
-            speed_test(0, cuda=cuda)
+            speed_test(0)
     if 'all' in argv:
         cwt_test(True, show=True)
         cwt_test(False, show=True)
