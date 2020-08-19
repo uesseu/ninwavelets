@@ -268,7 +268,7 @@ class WaveletBase:
         if self.mode in [CWTMode.Fast]:
             t = self._setup_trans_shape(real_length, real_length)
             result = formula(t, freq)
-            return result / self.get_wavelet_norm(ncp.fft.ifft(result))
+            return result / self.get_wavelet_norm(ncp.fft.ifft(result), (1,))
         else:
             wavelet = self.make_wavelet(freq)
             half = int((self.sfreq * self.real_wave_length
@@ -316,13 +316,12 @@ class WaveletBase:
         formula = self.cp_trans_formula if self.cuda else self.trans_formula
         if self.mode in [CWTMode.Fast]:
             # Make timeline
-            t = ncp.array([self._setup_trans_shape(real_length, real_length) for n in range(freqs.shape[0])])
+            t = ncp.tile(self._setup_trans_shape(real_length, real_length), (freqs.shape[0], 1))
             # Make fft wavelets
             many_freqs = ncp.tile(freqs, (t.shape[1], 1)).T
             result = formula(t, many_freqs)
             # Adjust norm
-            # divs = ncp.array([self.get_wavelet_norm(ncp.fft.ifft(r)) for r in result])
-            divs = ncp.array([self.get_wavelet_norm(ncp.fft.ifft(r)) for r in result])
+            divs = ncp.array(self.get_wavelet_norm(ncp.fft.ifft(result), (1,)))
             result /= ncp.tile(divs, (result.shape[1], 1)).T
             self.fft_wavelets = result
             return result
@@ -420,7 +419,7 @@ class WaveletBase:
         '''
         return freqs
 
-    def get_wavelet_norm(self, wavelet: Array) -> Array:
+    def get_wavelet_norm(self, wavelet: Array, axis: Optional[tuple] = None) -> Array:
         '''
         Get norm of wavelet.
 
@@ -430,7 +429,8 @@ class WaveletBase:
             Wavelet
         '''
         norm = cp.linalg.norm if self.cuda else np.linalg.norm
-        return NORM_CONSTANT * norm(wavelet.ravel())
+        result =  NORM_CONSTANT * norm(wavelet, axis=axis)
+        return result
 
 
     def make_wavelet(self, freq: float) -> Array:

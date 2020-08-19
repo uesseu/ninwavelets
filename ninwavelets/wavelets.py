@@ -89,11 +89,11 @@ class Morlet(WaveletBase):
     It is like Gabor Wavelet, which is not orthonormal.
 
     Example.
-    >>> morse = Morlet(1000, sigma=7.)
+    >>> morlet = Morlet(1000, sigma=7.)
     >>> freq = 60
     >>> time = np.arange(0, 0.3, 0.001)
     >>> sin = np.array([np.sin(time * freq * 2 * np.pi)])
-    >>> result = morse.power(sin, range(1, 100))
+    >>> result = morlet.power(sin, range(1, 100))
     >>> plt.imshow(result, cmap='RdBu_r')
     >>> plt.gca().invert_yaxis()
     >>> plt.title('CWT of 60Hz sin wave')
@@ -136,7 +136,8 @@ class Morlet(WaveletBase):
 
     def cp_trans_formula(self, freqs: cp.ndarray,
                          freq: float = 1.) -> cp.ndarray:
-        freqs = freqs / freq * self.peak_freq(freq)
+        peak_freq = self.sigma / (1. - cp.exp(-self.sigma * freq))
+        freqs = freqs / freq * peak_freq
         result = (self.c * cp.pi ** (-1/4) *
                   (cp.exp(-cp.square(self.sigma-freqs) / 2) -
                    self.k * cp.exp(-cp.square(freqs) / 2)))
@@ -159,7 +160,7 @@ class Morlet(WaveletBase):
                 * (np.exp(self.sigma * 1j * timeline) - self.k))
 
     def peak_freq(self, freq: float) -> float:
-        return float( self.sigma / (1. - np.exp(-self.sigma * freq)))
+        return self.sigma / (1. - np.exp(-self.sigma * freq))
 
 
 
@@ -261,7 +262,6 @@ class Haar(WaveletBase):
         self.cuda = cuda
 
     def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
-        print(timeline[0])
         timeline = np.where(np.abs(timeline) >= 1 / freq, timeline, 0)
         timeline = np.where(timeline > 0., 1, timeline)
         timeline = np.where(timeline < 0., -1, timeline)
