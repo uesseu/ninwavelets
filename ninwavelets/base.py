@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.fftpack import ifft, fft
 from scipy import fftpack
-from typing import Union, List, Iterator, Callable, Tuple, cast, Optional
+from typing import Union, List, Iterator, Callable, Tuple, cast, Optional, Dict
 from enum import Enum
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from functools import partial, reduce
@@ -193,6 +193,8 @@ class WaveletBase:
         self.freq_dist: float
         self.cuda: bool = cuda
         self._freqs: Numbers = None
+        self.freqs: Optional[Array] = None
+        self.stocks: Dict[str, Dict[str, Array]] = {'fft': {}, 'wavelet': {}}
 
     def _setup_trans_shape(self, freq: float,
                            real_wave_length: float) -> Array:
@@ -247,8 +249,7 @@ class WaveletBase:
     def peak_freq(self, freq: float) -> float:
         return 1.
 
-    def make_fft_wavelet(self, freq: float,
-                         real_length: float = 1.) -> Array:
+    def make_fft_wavelet(self, freq: float, real_length: float = 1.) -> Array:
         ''' Make single FFTed wavelet.
 
         Parameters
@@ -267,7 +268,7 @@ class WaveletBase:
         if self.mode in [CWTMode.Fast]:
             t = self._setup_trans_shape(real_length, real_length)
             result = formula(t, freq)
-            return result / self.get_wavelet_norm(ncp.fft.ifft(result))
+            return result / self.get_wavelet_norm(ncp.fft.ifft(result), (1,))
         else:
             wavelet = self.make_wavelet(freq)
             half = int((self.sfreq * self.real_wave_length
@@ -278,10 +279,8 @@ class WaveletBase:
             result.real = ncp.abs(result.real)
             return result
 
-    def make_fft_wavelets(self, freqs: Numbers,
-                          real_wave_length: float = 1.) -> List[Array]:
-        ''' Make list of FFTed wavelets.
-        Make Fourier transformed wavelet.
+    def make_fft_wavelets(self, freqs: Array, real_length: float = 1.) -> Array:
+        ''' Make single FFTed wavelet.
 
         Parameters
         ----------
@@ -292,11 +291,27 @@ class WaveletBase:
         -------
         np.ndarray[np.complex128, ndim=1]: FFTed Wavelet.
         '''
-        logger.info('Making ffted wavelet.')
-        self.freq_dist = freqs[1] - freqs[0]
-        make_w = partial(self.make_fft_wavelet, real_length=real_wave_length)
-        self.fft_wavelets = list(map(make_w, freqs))
-        return self.fft_wavelets
+        ncp = cp if self.cuda else np
+        if freqs[0] == 0:
+            raise ZeroDivisionError
+        formula = self.cp_trans_formula if self.cuda else self.trans_formula
+        if self.mode in [CWTMode.Fast]:
+            # Make timeline
+            t = ncp.tile(self._setup_trans_shape(real_length, real_length), (freqs.shape[0], 1))
+            # Make fft wavelets
+            many_freqs = ncp.tile(freqs, (t.shape[1], 1)).T
+            result = formula(t, many_freqs)
+            # Adjust norm
+            divs = ncp.array(self.get_wavelet_norm(ncp.fft.ifft(result), (1,)))
+            result /= ncp.tile(divs, (result.shape[1], 1)).T
+            self.fft_wavelets = result
+            return result
+        else:
+            logger.info('Making ffted wavelet.')
+            self.freq_dist = freqs[1] - freqs[0]
+            make_w = partial(self.make_fft_wavelet, real_length=real_length)
+            self.fft_wavelets = list(map(make_w, freqs))
+            return self.fft_wavelets
 
     def formula(self, timeline: Array, freq: float) -> Array:
         ''' formula
@@ -385,7 +400,7 @@ class WaveletBase:
         '''
         return freqs
 
-    def get_wavelet_norm(self, wavelet: Array) -> Array:
+    def get_wavelet_norm(self, wavelet: Array, axis: Optional[tuple] = None) -> Array:
         '''
         Get norm of wavelet.
 
@@ -395,9 +410,7 @@ class WaveletBase:
             Wavelet
         '''
         norm = cp.linalg.norm if self.cuda else np.linalg.norm
-        result = NORM_CONSTANT * np.linalg.norm(wavelet.ravel())
-        if (not self.cuda) and isinstance(result, cp.ndarray):
-            result = cp.asnumpy(result)
+        result =  NORM_CONSTANT * norm(wavelet, axis=axis)
         return result
 
 
@@ -434,6 +447,7 @@ class WaveletBase:
             wavelet /= self.get_wavelet_norm(wavelet)
         return wavelet
 
+
     def make_wavelets(self, freqs: Numbers) -> Array:
         '''
         Make wavelets. It returnes list of wavelet.
@@ -453,7 +467,7 @@ class WaveletBase:
 
 
     def cwt(self, wave: Array, freqs: Union[Numbers, None],
-            reuse: bool = True, logger: Logger = logger) -> Array:
+            logger: Logger = logger) -> Array:
         '''Perform CWT
 
         Parameters
@@ -462,23 +476,21 @@ class WaveletBase:
             Raw wave to transform.
         freqs: List[float]
             Frequencies.
-        reuse: bool = True
-            Reuse wavelet or not.
-            If raw wave length differ from length of wavelet,
-            or freqs are differ from previous transformation,
-            recreate wavelet even if it is True.
 
         Returns
         -------
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
-        reuse = True if self.real_wave_length != wave.shape[0] else reuse
+        reuse_wavelets = False
+        if (self.real_wave_length != wave.shape[0] and (self.freqs is freqs)):
+            reuse_wavelets = True
+        self.freqs = freqs
         self.real_wave_length = wave.shape[0] / self.sfreq
         if self.mode in [CWTMode.Fast, CWTMode.Normal]:
             if isinstance(wave, cp.ndarray):
                 logger.info('Cuda is enabled.')
                 self.cuda = True
-            return self.cwt_fft(wave, freqs, reuse, logger)
+            return self.cwt_fft(wave, freqs, reuse_wavelets, logger)
         if self.cuda:
             logger.warn('''
 Cuda is disabled, because cupy cannot convolve in this version.
@@ -490,10 +502,10 @@ Cuda is disabled, but the wave is cupy.ndarray.
 In this version, in Convolve mode, cuda is disabled.
 Converting to numpy is too slow. Exit.''')
             raise TypeError('Normal mode cannot use cupy.')
-        return self.cwt_convolve(wave, freqs, reuse, logger)
+        return self.cwt_convolve(wave, freqs, reuse_wavelets, logger)
 
     def cwt_convolve(self, wave: Array, freqs: Numbers,
-                     reuse: bool = True, logger: Logger = logger) -> Array:
+                     reuse_wavelets: bool, logger: Logger = logger) -> Array:
         '''
         Backend of cwt in convolve mode
 
@@ -503,26 +515,26 @@ Converting to numpy is too slow. Exit.''')
             Raw wave to transform.
         freqs: List[float]
             Frequencies.
-        reuse: bool = True
-            Reuse wavelet or not.
-            If raw wave length differ from length of wavelet,
-            or freqs are differ from previous transformation,
-            recreate wavelet even if it is True.
 
         Returns
         ----------
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
-        if (not reuse) or (not hasattr(self, '_pad_wavelets')):
-            self.make_wavelets(freqs)
-            pad_wave = partial(pad_to, wave_to=wave, cuda=self.cuda)
-            self._pad_wavelets = tuple(map(pad_wave, self.wavelets))
+        if (not reuse_wavelets) or (not hasattr(self, '_pad_wavelets')):
+            sid = ''.join((str(wave.shape), str(id(freqs))))
+            if sid in self.stocks['wavelet'].keys():
+                self._pad_wavelets = self.stocks['wavelet'][sid]
+            else:
+                self.make_wavelets(freqs)
+                pad_wave = partial(pad_to, wave_to=wave, cuda=self.cuda)
+                self._pad_wavelets = tuple(map(pad_wave, self.wavelets))
+                self.stocks['wavelet'].update({sid: self._pad_wavelets})
         logger.info('Applying convolve.')
         return np.array([np.convolve(w, wave, 'same')
                          for w in self._pad_wavelets])
 
     def cwt_fft(self, wave: Array, freqs: Numbers,
-                reuse: bool = True, logger: Logger = logger) -> Array:
+                reuse_wavelets: bool = True, logger: Logger = logger) -> Array:
         '''cwt
         Run CWT.
 
@@ -541,19 +553,23 @@ Converting to numpy is too slow. Exit.''')
         -------
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
-        if (not reuse) or (not hasattr(self, '_pad_fft_wavelets')):
-            self.make_fft_wavelets(freqs, wave.shape[0] / self.sfreq)
-            pad_wave = partial(pad_to, wave_to=wave, cuda=self.cuda)
-            asarray = cp.asarray if self.cuda else np.array
-            self._pad_fft_wavelets = asarray(tuple(map(pad_wave, self.fft_wavelets)))
+        if (not reuse_wavelets) or (not hasattr(self, '_pad_fft_wavelets')):
+            sid = ''.join((str(wave.shape), str(id(freqs))))
+            if sid in self.stocks['fft'].keys():
+                self._pad_fft_wavelets = self.stocks['fft'][sid]
+            else:
+                self.make_fft_wavelets(freqs, wave.shape[0] / self.sfreq)
+                pad_wave = partial(pad_to, wave_to=wave, cuda=self.cuda)
+                asarray = cp.asarray if self.cuda else np.array
+                self._pad_fft_wavelets = asarray(tuple(map(pad_wave, self.fft_wavelets)))
+                self.stocks['fft'].update({sid: self._pad_fft_wavelets})
         fft = cp.fft.ifft if self.cuda else fftpack.ifft
         ifft = cp.fft.fft if self.cuda else fftpack.fft
         self._freqs = freqs
         logger.info('Applying FFT mul.')
         return ifft(self._pad_fft_wavelets * fft(wave))
 
-    def power(self, wave: Array, freqs: Union[Numbers, None] = None,
-              reuse: bool = True,
+    def power(self, wave: Array, freqs: Array,
               logger: Logger = logger) -> Array:
         '''Perform CWT and calcurate power.
 
@@ -563,20 +579,16 @@ Converting to numpy is too slow. Exit.''')
             Raw wave to transform.
         freqs: List[float]
             Frequencies.
-        reuse: bool = True
-            Reuse wavelet or not.
-            If raw wave length differ from length of wavelet,
-            recreate wavelet even if it is True.
 
         Returns
         -------
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
         logger.info('Calculating power.')
-        return self.abs(wave, freqs, reuse) ** 2
+        return self.abs(wave, freqs, logger) ** 2
 
-    def abs(self, wave: Array, freqs: Union[Numbers, None] = None,
-            reuse: bool = True, logger: Logger = logger) -> Array:
+    def abs(self, wave: Array, freqs: Array,
+            logger: Logger = logger) -> Array:
         '''Perform CWT and calcurate absolute value.
 
         Parameters
@@ -585,10 +597,6 @@ Converting to numpy is too slow. Exit.''')
             Raw wave to transform.
         freqs: List[float]
             Frequencies.
-        reuse: bool = True
-            Reuse wavelet or not.
-            If raw wave length differ from length of wavelet,
-            recreate wavelet even if it is True.
 
         Returns
         -------
@@ -596,7 +604,7 @@ Converting to numpy is too slow. Exit.''')
         '''
         logger.info('Calculating absolute.')
         ncp = cp if self.cuda else np
-        return ncp.abs(self.cwt(wave, freqs, reuse))
+        return ncp.abs(self.cwt(wave, freqs, logger))
 
     def plot(self, freq: float, show: bool = True,
              logger: Logger = logger) -> plt.figure:
