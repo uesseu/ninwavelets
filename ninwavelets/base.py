@@ -174,7 +174,7 @@ class WaveletBase:
     '''
 
     def __init__(self, sfreq: float = 1000, real_wave_length: float = 1.,
-                 cuda: bool = False) -> None:
+                 cuda: bool = False, stocks_num: Optional[int] = None) -> None:
         '''
         Parameters
         ----------
@@ -195,6 +195,7 @@ class WaveletBase:
         self._freqs: Numbers = None
         self.freqs: Optional[Array] = None
         self.stocks: Dict[str, Dict[str, Array]] = {'fft': {}, 'wavelet': {}}
+        self.stocks_num = stocks_num
 
     def _setup_trans_shape(self, freq: float,
                            real_wave_length: float) -> Array:
@@ -218,7 +219,8 @@ class WaveletBase:
             Timeline to calculate wavelet.
         '''
         ncp = cp if self.cuda else np
-        return ncp.arange(0, self.sfreq / freq * real_wave_length, 1 / freq)
+        result = ncp.arange(0, self.sfreq * real_wave_length, 1) / freq
+        return result
 
     def _setup_waveletshape(self, freq: float, real_length: float = 1,
                             zero_mean: bool = False) -> Array:
@@ -238,12 +240,12 @@ class WaveletBase:
         -------
         Tuple[float, float]: (one, total)
         '''
-        total: float = self.real_wave_length * freq * 2 * np.pi / self.peak_freq(freq)
-        one: float = 2 / self.sfreq * np.pi * freq / self.peak_freq(freq)
+        total: float = self.real_wave_length
+        one: float = 1 / self.sfreq
         if zero_mean:
-            result = np.arange(-total / 2, total / 2, one)
+            result = np.arange(-total / 2, total / 2, one) * 2 * freq * np.pi / self.peak_freq(freq)
         else:
-            result = np.arange(0., total, one)
+            result = np.arange(0., total, one) * 2 * freq * np.pi / self.peak_freq(freq)
         return cp.asarray(result, np.float64) if self.cuda else result
 
     def peak_freq(self, freq: float) -> float:
@@ -302,18 +304,30 @@ class WaveletBase:
             many_freqs = ncp.tile(freqs, (t.shape[1], 1)).T
             result = formula(t, many_freqs)
             # Adjust norm
-            divs = ncp.array(self.get_wavelet_norm(ncp.fft.ifft(result), (1,)))
+            divs = self.get_wavelet_norm(ncp.fft.ifft(result), (1,))
             result /= ncp.tile(divs, (result.shape[1], 1)).T
             self.fft_wavelets = result
             return result
         else:
             logger.info('Making ffted wavelet.')
+            # It is slower code. In this case, using tuple was fast.
+
+            # wavelet = self.make_wavelets(freqs)
+            # half = int((self.sfreq * self.real_wave_length
+            #             - wavelet.shape[0]) / 2)
+            # wavelet = ncp.hstack((ncp.zeros((wavelet.shape[0], half)),
+            #                       wavelet, ncp.zeros((wavelet.shape[0], half))))
+            # result = ncp.fft.fft(wavelet)
+            # result.imag = ncp.abs(result.imag)
+            # result.real = ncp.abs(result.real)
+            # return result
+
             self.freq_dist = freqs[1] - freqs[0]
             make_w = partial(self.make_fft_wavelet, real_length=real_length)
-            self.fft_wavelets = list(map(make_w, freqs))
+            self.fft_wavelets = ncp.array(tuple(map(make_w, freqs)))
             return self.fft_wavelets
 
-    def formula(self, timeline: Array, freq: float) -> Array:
+    def formula(self, timeline: Array, freq: Union[Array, float]) -> Array:
         ''' formula
         The formula of Wavelet.
         Other procedures are performed by other methods.
@@ -335,7 +349,7 @@ class WaveletBase:
         '''
         return timeline
 
-    def cp_formula(self, timeline: Array, freq: float) -> Array:
+    def cp_formula(self, timeline: Array, freq: Union[Array, float]) -> Array:
         ''' formula
         The formula of Wavelet.
         Other procedures are performed by other methods.
@@ -358,7 +372,7 @@ class WaveletBase:
         return timeline
 
     def trans_formula(self, freqs: Iterator[float],
-                      freq: float = 1.) -> Array:
+                      freq: Union[Array, float] = 1.) -> Array:
         ''' trans_formula
         The formula of Fourier Transformed Wavelet.
         Other procedures are performed by other methods.
@@ -379,7 +393,7 @@ class WaveletBase:
         return freqs
 
     def cp_trans_formula(self, freqs: Iterator[float],
-                         freq: float = 1.) -> Array:
+                         freq: Union[Array, float] = 1.) -> Array:
         ''' trans_formula
         The formula of Fourier Transformed Wavelet.
         Other procedures are performed by other methods.
@@ -462,8 +476,31 @@ class WaveletBase:
         MorseWavelet: np.ndarray
         '''
         logger.info('Making wavelet.')
-        self.wavelets = tuple(map(self.make_wavelet, freqs))
-        return self.wavelets
+        ncp = cp if self.cuda else np
+        if freqs[0] == 0:
+            raise ZeroDivisionError
+        if self.mode in [CWTMode.Reverse, CWTMode.Fast]:
+            timelines = ncp.array(tuple(self._setup_trans_shape(freq, self.real_wave_length)
+                              for freq in freqs))
+            if self.cuda:
+                wavelet = cp.fft.ifft(self.cp_trans_formula(timelines))
+            else:
+                wavelet = ifft(self.trans_formula(timelines))
+            half = int(wavelet.shape[0])
+            start, stop = half // 2, half // 2 * 3
+            total_wavelet = ncp.hstack((ncp.conj(ncp.flip(wavelet)), wavelet))
+            wavelet = total_wavelet[start: stop]
+            # wavelet /= self.get_wavelet_norm(wavelet)
+            divs = ncp.array(self.get_wavelet_norm(wavelet, (1,)))
+            wavelet /= ncp.tile(divs, (wavelet.shape[1], 1)).T
+        else:
+            timeline = ncp.array([self._setup_waveletshape(freq, 1, zero_mean=True) for freq in freqs])
+            formula = self.cp_formula if self.cuda else self.formula
+            wavelet = formula(timeline, freqs)
+            divs = ncp.array(self.get_wavelet_norm(wavelet, (1,)))
+            wavelet /= ncp.tile(divs, (wavelet.shape[1], 1)).T
+        self.wavelets = wavelet
+        return wavelet
 
 
     def cwt(self, wave: Array, freqs: Union[Numbers, None],
@@ -520,18 +557,20 @@ Converting to numpy is too slow. Exit.''')
         ----------
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
-        if (not reuse_wavelets) or (not hasattr(self, '_pad_wavelets')):
+        ncp = cp if self.cuda else np
+        if (not reuse_wavelets) or (not hasattr(self, 'current_wavelets')):
             sid = ''.join((str(wave.shape), str(id(freqs))))
             if sid in self.stocks['wavelet'].keys():
-                self._pad_wavelets = self.stocks['wavelet'][sid]
-            else:
+                self.current_wavelets = self.stocks['wavelet'][sid]
+            elif (self.stocks_num is None) or\
+                self.stocks_num < len(self.stocks['wavelet']):
                 self.make_wavelets(freqs)
-                pad_wave = partial(pad_to, wave_to=wave, cuda=self.cuda)
-                self._pad_wavelets = tuple(map(pad_wave, self.wavelets))
-                self.stocks['wavelet'].update({sid: self._pad_wavelets})
+                self.current_wavelets = self.wavelets
+                if (self.stocks_num is None) or self.stocks_num > len(self.stocks['wavelet']):
+                    self.stocks['wavelet'].update({sid: self.current_wavelets})
         logger.info('Applying convolve.')
-        return np.array([np.convolve(w, wave, 'same')
-                         for w in self._pad_wavelets])
+        return ncp.array([ncp.convolve(w, wave, 'same')
+                          for w in self.current_wavelets])
 
     def cwt_fft(self, wave: Array, freqs: Numbers,
                 reuse_wavelets: bool = True, logger: Logger = logger) -> Array:
@@ -553,21 +592,20 @@ Converting to numpy is too slow. Exit.''')
         -------
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
-        if (not reuse_wavelets) or (not hasattr(self, '_pad_fft_wavelets')):
+        if (not reuse_wavelets) or (not hasattr(self, 'current_fft_wavelets')):
             sid = ''.join((str(wave.shape), str(id(freqs))))
             if sid in self.stocks['fft'].keys():
                 self._pad_fft_wavelets = self.stocks['fft'][sid]
             else:
                 self.make_fft_wavelets(freqs, wave.shape[0] / self.sfreq)
-                pad_wave = partial(pad_to, wave_to=wave, cuda=self.cuda)
-                asarray = cp.asarray if self.cuda else np.array
-                self._pad_fft_wavelets = asarray(tuple(map(pad_wave, self.fft_wavelets)))
-                self.stocks['fft'].update({sid: self._pad_fft_wavelets})
+                self.current_fft_wavelets = self.fft_wavelets
+                if(self.stocks_num is None) or self.stocks_num > len(self.stocks['fft']):
+                    self.stocks['fft'].update({sid: self.current_fft_wavelets})
         fft = cp.fft.ifft if self.cuda else fftpack.ifft
         ifft = cp.fft.fft if self.cuda else fftpack.fft
         self._freqs = freqs
         logger.info('Applying FFT mul.')
-        return ifft(self._pad_fft_wavelets * fft(wave))
+        return ifft(self.current_fft_wavelets * fft(wave))
 
     def power(self, wave: Array, freqs: Array,
               logger: Logger = logger) -> Array:

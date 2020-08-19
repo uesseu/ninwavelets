@@ -1,7 +1,8 @@
 # NinWavelets
 This is a python package for analystic wavelet transform.  
 Morlet, Shannon, Generalized Morse(GMW) and so on.  
-It is based on Numpy or Cuda, and it may be fast especially on Cuda.  
+Generally, CWT is very slow. But this is extremely fast for a python package.  
+It is based on Numpy or Cupy, and it may be fast especially on Cupy.  
 
 ![My EEG Power!](img/alpha.png)  
 This is my alpha band of EEG which was processed by this package.
@@ -14,7 +15,6 @@ freqs = cp.array(20, 100, 1)
 wave = cp.sin(cp.arange(0, 1000, 1))
 morse = Morse(1000)
 morse.cwt(wave, freqs)
-# morse.cwt(wave, cp.arange(20, 100, 1))   is slow!
 ```
 
 
@@ -22,16 +22,18 @@ morse.cwt(wave, freqs)
 There may be big advantages and limitations.  
 Please see Advantages and Limitations.  
 
-- Use wavelets which is originally Frourier transformed
+- Use wavelets various wavelets
     + Generalized Morse(A flexible wavelet, which has two parameters.)
     + Morlet/Gabor(Frourier transformed version of Morlet/Gabor.)
     + Shannon(It looks like Haar, when fourier transformed.)
+    + Mexcan hat
     + May be more(It is easy to scale!)
 - Skipping one FFT when performing CWT.
-    + May be better and faster if you use FFT method.
+    + May be better if you use FFT method.
 - Speed
-    + When you use cuda and process longwave, may be extremely faster!
-    + Even if you use numpy, it is very very fast!
+    + This package is extremely fast for a pure python package.  
+    + Cupy makes it extremely fast.  
+    + Even if you can not use cupy, it is very fast.
 - Reliability
     + Being brand new project, it has no achivement...
     + There may be lots of bugs.
@@ -68,18 +70,14 @@ and then, run
 pip install cupy
 ```
 
-Ninwavelets with cuda is extremely fast if you process long wave,  
-like my EEG power example.  
-
-
 # Usage
 - At first, import wavelets and import numpy or cupy.
 - Ninwavelets can use cuda, and so, switch numpy or cupy.
 - The wave must be numpy or cupy data.
   + If you want to use cuda, prepare cupy data! It does not transform!
-- Make instance of wavelet
-- Make frequency instance as numpy, cupy or range.
-  + If you did not make it, ninwavelets may becomes extremely slower!
+- Make instance of wavelet.
+- Make frequency instance as numpy or cupy.
+  + If you did not make it, ninwavelets may becomes slower!
 - Perform cwt.
 
 
@@ -96,9 +94,9 @@ morse.cwt(wave, freqs)
 
 # Purpose and background
 At first, this package was written to perform GMW on mne python.  
-But I wrote CWT. Because GMW can skip one inverse FFT.  
-Now it has own CWT method, which can skip one inverse FFT.  
-And I noticed, it is good for Morlet Wavelet too.  
+But I wrote CWT. Because GMW needs one inverse FFT for no purpose.  
+Now it has own CWT method.  
+And I noticed, it may be good for Morlet Wavelet too.  
 The result resembles that of mne python.  
 
 This is a brand new project, and under heavily development(Mainly on my Sunday).  
@@ -106,8 +104,7 @@ Destructive changes may be made.
 
 # Exsamples
 GMW is similar to morlet wavelet, if you use default param.  
-
-You can calculate complex value and power.  
+You can calculate complex value, abosolute value and power.  
 
 ```python
 from ninwavelets import Morse
@@ -150,8 +147,6 @@ If you just want to perform cwt only, write like this.
 result = morse.cwt(sin, range(1, 100))
 ```
 
-If you are mne user, epochs can be processed.  
-But it is not so useful. See 'NinWavelets for MNE'.  
 
 These are results from my test code.  
 
@@ -220,8 +215,8 @@ Convolve(InverseFFT(Transformed_wavelet) @ wave_to_analyze)
 It seems bad, and this is why I wrote this package.  
 
 ### Reverse mode
-Even if there is formula of wavelet, in this mode,  
-ninwavelet try to perform inverseFFT before convolving.  
+Even if there is a formula of wavelet, in this mode,  
+ninwavelet tries to perform inverseFFT before convolving.  
 
 
 ## About modes
@@ -371,7 +366,7 @@ plt.show()
 Same as CWT, but returns power value.  
 Power value is square(abs(cwt)).
 
-## power
+## abs
 Same as CWT, but returns absolute value.  
 
 ## Baseline Class
@@ -435,11 +430,11 @@ class Morlet(WaveletBase):
     '''
     Morlet Wavelets.
     Example.
-    >>> morse = Morse(1000, sigma=7.)
+    >>> morlet = Morse(1000, sigma=7.)
     >>> freq = 60
     >>> time = np.arange(0, 0.3, 0.001)
     >>> sin = np.array([np.sin(time * freq * 2 * np.pi)])
-    >>> result = morse.power(sin, range(1, 100))
+    >>> result = morlet.power(sin, range(1, 100))
     >>> plt.imshow(result, cmap='RdBu_r')
     >>> plt.gca().invert_yaxis()
     >>> plt.title('CWT of 60Hz sin wave')
@@ -458,7 +453,7 @@ class Morlet(WaveletBase):
 
     Returns
     -------
-    As constructor, Morse instance its self.
+    As constructor, Morlet instance its self.
     '''
 
     def __init__(self, sfreq: float = 1000, sigma: float = 7.,
@@ -510,13 +505,13 @@ The formulas may be written in mathmatical papers! ;)
 
 # Advantages and Limitations
 
-## Benchmark
+## Speed
 From version 0.0.3, It became extremely fast.  
 **But it is not so fast if you write in wrong way.**  
 **It is fast only when performing cwt.**  
 See 'Fast coding of ninwavelets' to write fast code.  
 
-I performed benchmark test by my NotePC  
+I tested speed of cwt by my NotePC  
 'Dell G3 15-3579r' with Intel corei7(4.1Ghz 6core) and Geforce GTX1050.  
 (Turbo boost is off)  
 
@@ -533,20 +528,17 @@ Sampling freq: 1000
 | 50sec  | numpy       | 134sec   |
 
 I do not write about other packages.  
-But when I tested, ninwavelets seemd to be extremely faster.  
+But when I tested, ninwavelets seemd to be extremely faster totally.  
 
 Did you think ninwavelet based on cuda seems to be extremely fast?  
 **It is not true every time.** Throwing data into GPU takes much time.  
-But when I compare it to other packages, it still seems to be faster  
-even if numpy backend was used.  
-And so, I think, ninwavelet is totally, very very fast.  
-Ninwavelets is much more simple package now, and so,  
-perhaps, it has less functions than other packages.  
+In some cases, numpy may faster than cupy.  
+Ninwavelets is simple package now, and so,  
+it may has less functions than other packages.  
 
 ## Fast coding of ninwavelets
-You should make a frequency variable.  
-Nin wavelets takes long time to make one wavelet.  
-It is fast only when performing cwt.  
+It is not good for performance to make new wavelets every time,  
+if wave length is not changed every time.  
 And so, it memorizes wavelets after cwt.  
 
 This is the bad example
@@ -563,18 +555,19 @@ freqs = np.arange(1, 1000, 1)
 morse.cwt(wave, freqs)
 ```
 
-Memorizing wavelets may takes big memory.  
+Making wavelets is not so slow and memorizing wavelets may takes big memory.  
+And so, optionally, you can skip memorizing.  
 
 ## Why is it so fast?
 
 You may think, this package performs strange calculation.  
-But what I have done is just adjusting bottle necks.  
+But what I have done is just adjusting bottle necks carefully.  
 Coding wavelet transform itself is not difficult.  
-But there is some way to write fast code using numpy or cupy.  
-Fast code should skip no purpose calculation.  
-This package skips calculation as much as possible.  
-Furthur more, transfering data into GPU takes much time.  
-I just adjusted the bottle necks carefully.  
+There is some way to write fast code...
+
+- Skip calculation as much as possible.
+- Skip tranfering data between main memory and GPU.
+- Skip processing by pure python and write in cupy or numpy as much as possible.
 
 ## Method
 
@@ -600,10 +593,10 @@ iFFT(FFT(wave) * FFT(wavelet))  # Fast, and widely used. But not good.
 **3**
 
 ``
-iFFT(FFT(wave) * FFTed_wavelet)  # Better and faster than 2.
+iFFT(FFT(wave) * FFTed_wavelet)  # Not good but may be better than 2.
 ```
 
-I adopted method 3 as Normal mode. Not only GMW, but also Morlet wavelet transform will be performed by 3.
+I adopted method 3 as Fast mode. Not only GMW, but also Morlet wavelet transform will be performed by 3.
 
 ## It is just my hobby
 This project is just my hobby, and I am not an engineer or scholar, just a nurd.  
@@ -642,7 +635,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     + [x] It was cythonized before. But it is not good for scalability.
     + [x] It may be faster with cupy if you process long wave.
     + [x] Now, It is extremely fast!
-- [ ] Kill typos(I am a Nip and not good at English) ;(
+- [ ] Kill typos(I am a Jap without intelligence and not good at English) ;(
 - [x] Licence
     + [x] Whether write my name or not.
         * [x] I wrote one of my handle name.

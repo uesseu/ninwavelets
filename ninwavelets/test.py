@@ -332,6 +332,9 @@ def speed_test(i: int) -> None:
     plt.bar(np.arange(0, 7, 1),
             1 / np.array([pywavelet_time, scipy_time, mne_time, swan_time, ninwavelet_time_slow, ninwavelet_time, ninwavelet_time_cuda]),
             tick_label=['PyWavelet', 'Scipy', 'MNE', 'Swan', 'Ninwavelets\nSlow', 'Ninwavelets', 'Ninwavelets\nCuda'])
+    plt.xlabel('Packages')
+    plt.ylabel('Speed. (100trial / sec) Bigger is fast.')
+    plt.title('1sec wave, Sampling frequency:1000Hz\nMorletWavelet(30~500Hz) 100times')
     plt.show()
 
 
