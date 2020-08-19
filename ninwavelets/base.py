@@ -279,25 +279,6 @@ class WaveletBase:
             result.real = ncp.abs(result.real)
             return result
 
-    # def make_fft_wavelets(self, freqs: Numbers,
-    #                       real_wave_length: float = 1.) -> List[Array]:
-    #     ''' Make list of FFTed wavelets.
-    #     Make Fourier transformed wavelet.
-
-    #     Parameters
-    #     ----------
-    #     freq: float
-    #         Frequency of wavelet.
-
-    #     Returns
-    #     -------
-    #     np.ndarray[np.complex128, ndim=1]: FFTed Wavelet.
-    #     '''
-    #     logger.info('Making ffted wavelet.')
-    #     self.freq_dist = freqs[1] - freqs[0]
-    #     make_w = partial(self.make_fft_wavelet, real_length=real_wave_length)
-    #     self.fft_wavelets = list(map(make_w, freqs))
-    #     return self.fft_wavelets
     def make_fft_wavelets(self, freqs: Array, real_length: float = 1.) -> Array:
         ''' Make single FFTed wavelet.
 
