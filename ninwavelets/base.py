@@ -519,7 +519,8 @@ class WaveletBase:
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
         reuse_wavelets = False
-        if (self.real_wave_length != wave.shape[0] and (self.freqs is freqs)):
+        if (self.real_wave_length == wave.shape[0] / self.sfreq) and\
+                (self.freqs is freqs):
             reuse_wavelets = True
         self.freqs = freqs
         self.real_wave_length = wave.shape[0] / self.sfreq
@@ -562,8 +563,7 @@ Converting to numpy is too slow. Exit.''')
             sid = ''.join((str(wave.shape), str(id(freqs))))
             if sid in self.stocks['wavelet'].keys():
                 self.current_wavelets = self.stocks['wavelet'][sid]
-            elif (self.stocks_num is None) or\
-                self.stocks_num < len(self.stocks['wavelet']):
+            else:
                 self.make_wavelets(freqs)
                 self.current_wavelets = self.wavelets
                 if (self.stocks_num is None) or self.stocks_num > len(self.stocks['wavelet']):
@@ -595,7 +595,7 @@ Converting to numpy is too slow. Exit.''')
         if (not reuse_wavelets) or (not hasattr(self, 'current_fft_wavelets')):
             sid = ''.join((str(wave.shape), str(id(freqs))))
             if sid in self.stocks['fft'].keys():
-                self._pad_fft_wavelets = self.stocks['fft'][sid]
+                self.current_fft_wavelets = self.stocks['fft'][sid]
             else:
                 self.make_fft_wavelets(freqs, wave.shape[0] / self.sfreq)
                 self.current_fft_wavelets = self.fft_wavelets

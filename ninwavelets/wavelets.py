@@ -1,5 +1,5 @@
 from .base import WaveletBase, CWTMode
-from typing import Union, List, cast
+from typing import Union, List, cast, Optional
 import numpy as np
 try:
     import cupy as cp
@@ -47,8 +47,10 @@ class Morse(WaveletBase):
     '''
 
     def __init__(self, sfreq: float = 1000, b: float = 17.5, r: float = 3,
-                 real_wave_length: float = 1., cuda: bool = False) -> None:
-        super(Morse, self).__init__(sfreq, real_wave_length, cuda)
+                 real_wave_length: float = 1., cuda: bool = False,
+                 stocks_num: Optional[int] = None) -> None:
+        super(Morse, self).__init__(sfreq, real_wave_length, cuda,
+                                    stocks_num=stocks_num)
         self.r: float = r
         self.b: float = b
         self.mode = CWTMode.Fast
@@ -124,8 +126,10 @@ class Morlet(WaveletBase):
 
     def __init__(self, sfreq: float = 1000, sigma: float = 7.,
                  real_wave_length: float = 1.,
-                 gabor: bool = False, cuda: bool = False) -> None:
-        super(Morlet, self).__init__(sfreq, real_wave_length, cuda)
+                 gabor: bool = False, cuda: bool = False,
+                 stocks_num: Optional[int] = None) -> None:
+        super(Morlet, self).__init__(sfreq, real_wave_length, cuda,
+                                     stocks_num=stocks_num)
         self.mode = CWTMode.Fast
         self.sigma = sigma
         self.c = np.float_power(1
@@ -187,8 +191,10 @@ class MexicanHat(WaveletBase):
     '''
 
     def __init__(self, sfreq: float = 1000, sigma: float = 7,
-                 real_wave_length: float = 1., cuda: bool = False) -> None:
-        super(MexicanHat, self).__init__(sfreq, real_wave_length, cuda)
+                 real_wave_length: float = 1., cuda: bool = False,
+                 stocks_num: Optional[int] = None) -> None:
+        super(MexicanHat, self).__init__(sfreq, real_wave_length, cuda,
+                                         stocks_num=stocks_num)
         self.sigma: float = sigma
         self.mode = CWTMode.Fast
         self.help = ''
@@ -226,8 +232,10 @@ class Shannon(WaveletBase):
     '''
 
     def __init__(self, sfreq: float = 1000, 
-                 real_wave_length: float = 1., cuda: bool = False) -> None:
-        super(Shannon, self).__init__(sfreq, real_wave_length, cuda)
+                 real_wave_length: float = 1., cuda: bool = False,
+                 stocks_num: Optional[int] = None) -> None:
+        super(Shannon, self).__init__(sfreq, real_wave_length, cuda,
+                                      stocks_num=stocks_num)
         self.mode = CWTMode.Fast
         self.help = ''
 
@@ -256,8 +264,10 @@ class Haar(WaveletBase):
     As constructor, Shannon instance its self.
     '''
     def __init__(self, sfreq: float = 1000,
-                 real_wave_length: float = 1., cuda: bool = False) -> None:
-        super(Haar, self).__init__(sfreq, real_wave_length, cuda)
+                 real_wave_length: float = 1., cuda: bool = False,
+                 stocks_num: Optional[int] = None) -> None:
+        super(Haar, self).__init__(sfreq, real_wave_length, cuda,
+                                   stocks_num=stocks_num)
         self.mode = CWTMode.Convolve
         self.cuda = cuda
 
