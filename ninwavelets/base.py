@@ -174,7 +174,7 @@ class WaveletBase:
     '''
 
     def __init__(self, sfreq: float = 1000, real_wave_length: float = 1.,
-                 cuda: bool = False, stocks_num: Optional[int] = None) -> None:
+                 cuda: bool = False, keep_num: Optional[int] = None) -> None:
         '''
         Parameters
         ----------
@@ -194,8 +194,8 @@ class WaveletBase:
         self.cuda: bool = cuda
         self._freqs: Numbers = None
         self.freqs: Optional[Array] = None
-        self.stocks: Dict[str, Dict[str, Array]] = {'fft': {}, 'wavelet': {}}
-        self.stocks_num = stocks_num
+        self.kept: Dict[str, Dict[str, Array]] = {'fft': {}, 'wavelet': {}}
+        self.keep_num = keep_num
 
     def _setup_trans_shape(self, freq: float,
                            real_wave_length: float) -> Array:
@@ -561,13 +561,13 @@ Converting to numpy is too slow. Exit.''')
         ncp = cp if self.cuda else np
         if (not reuse_wavelets) or (not hasattr(self, 'current_wavelets')):
             sid = ''.join((str(wave.shape), str(id(freqs))))
-            if sid in self.stocks['wavelet'].keys():
-                self.current_wavelets = self.stocks['wavelet'][sid]
+            if sid in self.kept['wavelet'].keys():
+                self.current_wavelets = self.kept['wavelet'][sid]
             else:
                 self.make_wavelets(freqs)
                 self.current_wavelets = self.wavelets
-                if (self.stocks_num is None) or self.stocks_num > len(self.stocks['wavelet']):
-                    self.stocks['wavelet'].update({sid: self.current_wavelets})
+                if (self.keep_num is None) or self.keep_num > len(self.kept['wavelet']):
+                    self.kept['wavelet'].update({sid: self.current_wavelets})
         logger.info('Applying convolve.')
         return ncp.array([ncp.convolve(w, wave, 'same')
                           for w in self.current_wavelets])
@@ -594,13 +594,13 @@ Converting to numpy is too slow. Exit.''')
         '''
         if (not reuse_wavelets) or (not hasattr(self, 'current_fft_wavelets')):
             sid = ''.join((str(wave.shape), str(id(freqs))))
-            if sid in self.stocks['fft'].keys():
-                self.current_fft_wavelets = self.stocks['fft'][sid]
+            if sid in self.kept['fft'].keys():
+                self.current_fft_wavelets = self.kept['fft'][sid]
             else:
                 self.make_fft_wavelets(freqs, wave.shape[0] / self.sfreq)
                 self.current_fft_wavelets = self.fft_wavelets
-                if(self.stocks_num is None) or self.stocks_num > len(self.stocks['fft']):
-                    self.stocks['fft'].update({sid: self.current_fft_wavelets})
+                if(self.keep_num is None) or self.keep_num > len(self.kept['fft']):
+                    self.kept['fft'].update({sid: self.current_fft_wavelets})
         fft = cp.fft.ifft if self.cuda else fftpack.ifft
         ifft = cp.fft.fft if self.cuda else fftpack.fft
         self._freqs = freqs

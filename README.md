@@ -116,8 +116,8 @@ time = np.arange(0, 0.3, 0.001)
 # Now lets analyze sin wave!
 sin = np.array([np.sin(time * freq * 2 * np.pi)])
 
-result = morse.power(sin, range(1, 100))
-complex_result = morse.cwt(sin, range(1, 100))
+result = morse.power(sin, np.arange(1, 100))
+complex_result = morse.cwt(sin, np.arange(1, 100))
 plt.imshow(result, cmap='RdBu_r')
 plt.gca().invert_yaxis()
 plt.title('CWT of 60Hz sin wave')
@@ -144,7 +144,7 @@ plot_tf(result)
 If you just want to perform cwt only, write like this.  
 
 ```python
-result = morse.cwt(sin, range(1, 100))
+result = morse.cwt(sin, arange(1, 100))
 ```
 
 
@@ -506,25 +506,23 @@ The formulas may be written in mathmatical papers! ;)
 # Advantages and Limitations
 
 ## Speed
-From version 0.0.3, It became extremely fast.  
-**But it is not so fast if you write in wrong way.**  
-**It is fast only when performing cwt.**  
-See 'Fast coding of ninwavelets' to write fast code.  
+From version 0.1.3, It became extremely fast **totally**!
+If you want to make best effort, read 'Fast coding of ninwavelets' to write fast code.  
 
 I tested speed of cwt by my NotePC  
 'Dell G3 15-3579r' with Intel corei7(4.1Ghz 6core) and Geforce GTX1050.  
 (Turbo boost is off)  
 
 ninwavelet version 0.1.0
-50 morse wavelet transform
+100 morse wavelet transform
 Sampling freq: 1000
-1~1000Hz
+30~500Hz
 
 | Length | back ground | CWT time |
 |--------|-------------|----------|
-| 1sec   | cupy        | 2.32sec  |
-| 1sec   | numpy       | 2.29sec  |
-| 50sec  | cupy        | 3.2sec   |
+| 1sec   | cupy        | 0.205sec  |
+| 1sec   | numpy       | 1.05sec  |
+| 50sec  | cupy        | 1.31sec   |
 | 50sec  | numpy       | 134sec   |
 
 I do not write about other packages.  

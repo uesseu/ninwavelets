@@ -18,8 +18,8 @@ class Morse(WaveletBase):
     >>> morse = Morse(1000, r=3., b=17.5)
     >>> freq = 60
     >>> time = np.arange(0, 0.3, 0.001)
-    >>> sin = np.array([np.sin(time * freq * 2 * np.pi)])
-    >>> result = morse.power(sin, range(1, 100))
+    >>> sin = np.array(np.sin(time * freq * 2 * np.pi))
+    >>> result = morse.power(sin, np.arange(1, 100))
     >>> plt.imshow(result, cmap='RdBu_r')
     >>> plt.gca().invert_yaxis()
     >>> plt.title('CWT of 60Hz sin wave')
@@ -40,6 +40,9 @@ class Morse(WaveletBase):
         This param is cutting threshould of wavelets.
     cuda: bool
         Use cuda
+    keep_num: Optional[int]
+        Number of wavelets, which will be kept in the instance.
+        If it is None, it will keep all the wavelets.
 
     Returns
     -------
@@ -48,9 +51,9 @@ class Morse(WaveletBase):
 
     def __init__(self, sfreq: float = 1000, b: float = 17.5, r: float = 3,
                  real_wave_length: float = 1., cuda: bool = False,
-                 stocks_num: Optional[int] = None) -> None:
+                 keep_num: Optional[int] = None) -> None:
         super(Morse, self).__init__(sfreq, real_wave_length, cuda,
-                                    stocks_num=stocks_num)
+                                    keep_num=keep_num)
         self.r: float = r
         self.b: float = b
         self.mode = CWTMode.Fast
@@ -94,8 +97,8 @@ class Morlet(WaveletBase):
     >>> morlet = Morlet(1000, sigma=7.)
     >>> freq = 60
     >>> time = np.arange(0, 0.3, 0.001)
-    >>> sin = np.array([np.sin(time * freq * 2 * np.pi)])
-    >>> result = morlet.power(sin, range(1, 100))
+    >>> sin = np.array(np.sin(time * freq * 2 * np.pi))
+    >>> result = morlet.power(sin, np.arange(1, 100))
     >>> plt.imshow(result, cmap='RdBu_r')
     >>> plt.gca().invert_yaxis()
     >>> plt.title('CWT of 60Hz sin wave')
@@ -118,6 +121,9 @@ class Morlet(WaveletBase):
         Peak wave * length is the length of wavelet.
     cuda: bool
         Use cuda.
+    keep_num: Optional[int]
+        Number of wavelets, which will be kept in the instance.
+        If it is None, it will keep all the wavelets.
 
     Returns
     -------
@@ -127,9 +133,9 @@ class Morlet(WaveletBase):
     def __init__(self, sfreq: float = 1000, sigma: float = 7.,
                  real_wave_length: float = 1.,
                  gabor: bool = False, cuda: bool = False,
-                 stocks_num: Optional[int] = None) -> None:
+                 keep_num: Optional[int] = None) -> None:
         super(Morlet, self).__init__(sfreq, real_wave_length, cuda,
-                                     stocks_num=stocks_num)
+                                     keep_num=keep_num)
         self.mode = CWTMode.Fast
         self.sigma = sigma
         self.c = np.float_power(1
@@ -184,6 +190,9 @@ class MexicanHat(WaveletBase):
         Length of wavelet.
     cuda: bool
         Use cuda
+    keep_num: Optional[int]
+        Number of wavelets, which will be kept in the instance.
+        If it is None, it will keep all the wavelets.
 
     Returns
     -------
@@ -192,9 +201,9 @@ class MexicanHat(WaveletBase):
 
     def __init__(self, sfreq: float = 1000, sigma: float = 7,
                  real_wave_length: float = 1., cuda: bool = False,
-                 stocks_num: Optional[int] = None) -> None:
+                 keep_num: Optional[int] = None) -> None:
         super(MexicanHat, self).__init__(sfreq, real_wave_length, cuda,
-                                         stocks_num=stocks_num)
+                                         keep_num=keep_num)
         self.sigma: float = sigma
         self.mode = CWTMode.Fast
         self.help = ''
@@ -225,6 +234,9 @@ class Shannon(WaveletBase):
         Length of wavelet.
     cuda: bool
         Use cuda
+    keep_num: Optional[int]
+        Number of wavelets, which will be kept in the instance.
+        If it is None, it will keep all the wavelets.
 
     Returns
     -------
@@ -233,9 +245,9 @@ class Shannon(WaveletBase):
 
     def __init__(self, sfreq: float = 1000, 
                  real_wave_length: float = 1., cuda: bool = False,
-                 stocks_num: Optional[int] = None) -> None:
+                 keep_num: Optional[int] = None) -> None:
         super(Shannon, self).__init__(sfreq, real_wave_length, cuda,
-                                      stocks_num=stocks_num)
+                                      keep_num=keep_num)
         self.mode = CWTMode.Fast
         self.help = ''
 
@@ -258,6 +270,9 @@ class Haar(WaveletBase):
         Length of wavelet.
     cuda: bool
         Use cuda
+    keep_num: Optional[int]
+        Number of wavelets, which will be kept in the instance.
+        If it is None, it will keep all the wavelets.
 
     Returns
     -------
@@ -265,9 +280,9 @@ class Haar(WaveletBase):
     '''
     def __init__(self, sfreq: float = 1000,
                  real_wave_length: float = 1., cuda: bool = False,
-                 stocks_num: Optional[int] = None) -> None:
+                 keep_num: Optional[int] = None) -> None:
         super(Haar, self).__init__(sfreq, real_wave_length, cuda,
-                                   stocks_num=stocks_num)
+                                   keep_num=keep_num)
         self.mode = CWTMode.Convolve
         self.cuda = cuda
 
