@@ -506,7 +506,7 @@ The formulas may be written in mathmatical papers! ;)
 # Advantages and Limitations
 
 ## Speed
-From version 0.1.3, It became extremely fast **totally**!
+From version 0.1.3, It became extremely fast **totally**!  
 If you want to make best effort, read 'Fast coding of ninwavelets' to write fast code.  
 
 I tested speed of cwt by my NotePC  
@@ -520,9 +520,9 @@ Sampling freq: 1000
 
 | Length | back ground | CWT time |
 |--------|-------------|----------|
-| 1sec   | cupy        | 0.205sec  |
+| 1sec   | cupy        | 0.205sec |
 | 1sec   | numpy       | 1.05sec  |
-| 50sec  | cupy        | 1.31sec   |
+| 50sec  | cupy        | 1.31sec  |
 | 50sec  | numpy       | 134sec   |
 
 I do not write about other packages.  
@@ -590,7 +590,7 @@ iFFT(FFT(wave) * FFT(wavelet))  # Fast, and widely used. But not good.
 
 **3**
 
-``
+```
 iFFT(FFT(wave) * FFTed_wavelet)  # Not good but may be better than 2.
 ```
 
