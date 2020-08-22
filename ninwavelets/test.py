@@ -6,7 +6,7 @@ from multiprocessing import Pool
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft, ifft
 from mne.time_frequency.tfr import morlet, cwt
-from ninwavelets import (Morse, Morlet, CWTMode,
+from ninwavelets import (Morse, Morlet, CWTMode, np2cp,
                          Haar, plot_tf, MexicanHat, Shannon, Baseline)
 from mne.io import Raw
 from mne import verbose
@@ -115,13 +115,14 @@ def cwt_test(cuda: bool = False, show: bool = False) -> None:
 
     ncp = cp if cuda else np
     log.info('''Fast mode test for GMW''')
+    t = time()
     morse = Morse(cuda=cuda, sfreq=1000)
     result_morse = morse.power(sin, ncp.arange(min_freq, max_freq, 1))
+    print(f'Morse {time() - t}')
 
     log.info('''Change to Normal mode test for GMW only for numpy''')
     if not cuda:
         morse.mode = CWTMode.Normal
-    t = time()
     morse.power(sin, ncp.arange(min_freq, max_freq, 1))
 
     log.info('''Normal mode test
@@ -129,7 +130,9 @@ Normal mode is only for numpy
 Because cupy 7.6.0 has no method named convolve''')
     nin_morlet = Morlet(cuda=False, sfreq=1000)
     nin_morlet.mode = CWTMode.Convolve
+    t = time()
     result_morlet = nin_morlet.power(cp.asnumpy(sin), np.arange(min_freq, max_freq, 1))
+    print(f'Morlet {time() - t}')
     if cuda:
         sin = cp.asnumpy(sin)
         nin_morlet = morlet(1000, np.arange(min_freq, max_freq, 1), zero_mean=True)[0]
@@ -142,6 +145,7 @@ Because cupy 7.6.0 has no method named convolve''')
     result_mne = cwt(np.array([sin]),
                      morlet(1000, np.arange(min_freq, max_freq, 1)),
                      use_fft=False)[0] ** 2
+    print(f'MNE {time() - t}')
 
     if show:
         # plt.plot(nin_morlet.wavelets[15])
@@ -365,3 +369,14 @@ if __name__ == '__main__':
         cwt_test(True, show=True)
         cwt_test(False, show=True)
         other_wavelet_test()
+    if 'async' in argv:
+        data = [np.asarray(np.arange(1, 1000, 1)) for i in range(100)]
+        t = time()
+        for n in data:
+            cp.asarray(n)
+        print(f'Sync {time() - t}')
+
+        t = time()
+        for n in range(100):
+            np2cp(*data)
+        print(f'Async {time() - t}')

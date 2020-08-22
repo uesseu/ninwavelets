@@ -26,6 +26,34 @@ NORM_CONSTANT = np.sqrt(0.5)
 
 
 
+def cp_alloc(array: np.ndarray) -> np.ndarray:
+  buf = np.frombuffer(cp.cuda.alloc_pinned_memory(array.nbytes),
+                      array.dtype,
+                      array.size).reshape(array.shape)
+  buf[...] = array
+  return buf
+
+
+def np2cp(*npdata: np.ndarray) -> cp.ndarray:
+    '''
+    A simple loader from numpy to cupy.
+    This function loads data ansyncloneously.
+    But if you want to load over 10000, it is slow.
+    Testing speed of this function before use it is recommended.
+    >>> first = np.arange(1, 1000, 1)
+    >>> second = np.arange(1, 1000, 1)
+    >>> set_of_data = [first, second]
+    >>> cp_first, cp_second = np2cp(*set_of_data)
+    '''
+    copy_npdata = tuple(cp_alloc(npd) for npd in npdata)
+    cupy_mem = tuple(cp.ndarray(npd.shape, npd.dtype) for npd in npdata)
+    streams = tuple(cp.cuda.Stream(non_blocking=True) for npd in npdata)
+    tuple(cmem.set(cnpd, stream) for cmem, cnpd, stream in zip(cupy_mem, copy_npdata, streams))
+    tuple(stream.synchronize() for stream in streams)
+    return cupy_mem
+
+
+
 def baseline_of(wave: Array, sfreq: float, start: float, stop: float) -> Array:
     return wave[int(start * sfreq): int(stop * sfreq)]
 
@@ -189,7 +217,7 @@ class WaveletBase:
         self.mode: CWTMode = CWTMode.Fast
         self.sfreq: float = sfreq
         self.help: str = ''
-        self.real_wave_length: float = real_wave_length
+        self.wave_length: int = int(real_wave_length * sfreq)
         self.freq_dist: float
         self.cuda: bool = cuda
         self._freqs: Numbers = None
@@ -198,11 +226,11 @@ class WaveletBase:
         self.keep_num = keep_num
 
     def _setup_trans_shape(self, freq: float,
-                           real_wave_length: float) -> Array:
+                           wave_length: int) -> Array:
         '''
         Setup wave shape.
         real_length is length of wavelet(for example, sec or msec)
-        self.real_wave_length is length of wave to analyze.
+        wave_length is length of array to analyze.
 
         Parameters
         ----------
@@ -219,7 +247,7 @@ class WaveletBase:
             Timeline to calculate wavelet.
         '''
         ncp = cp if self.cuda else np
-        result = ncp.arange(0, self.sfreq * real_wave_length, 1) / freq
+        result = ncp.arange(0, wave_length, 1) / freq
         return result
 
     def _setup_waveletshape(self, freq: float, real_length: float = 1,
@@ -240,12 +268,12 @@ class WaveletBase:
         -------
         Tuple[float, float]: (one, total)
         '''
-        total: float = self.real_wave_length
-        one: float = 1 / self.sfreq
         if zero_mean:
-            result = np.arange(-total / 2, total / 2, one) * 2 * freq * np.pi / self.peak_freq(freq)
+            result = np.arange(-self.wave_length / 2, self.wave_length / 2, 1)\
+                * 2 * freq * np.pi / (self.peak_freq(freq) * self.sfreq)
         else:
-            result = np.arange(0., total, one) * 2 * freq * np.pi / self.peak_freq(freq)
+            result = np.arange(0., self.wave_length, 1)\
+                * 2 * freq * np.pi / (self.peak_freq(freq) * self.sfreq)
         return cp.asarray(result, np.float64) if self.cuda else result
 
     def peak_freq(self, freq: float) -> float:
@@ -268,13 +296,12 @@ class WaveletBase:
             raise ZeroDivisionError
         formula = self.cp_trans_formula if self.cuda else self.trans_formula
         if self.mode in [CWTMode.Fast]:
-            t = self._setup_trans_shape(real_length, real_length)
+            t = self._setup_trans_shape(real_length, self.wave_length)
             result = formula(t, freq)
             return result / self.get_wavelet_norm(ncp.fft.ifft(result), (1,))
         else:
             wavelet = self.make_wavelet(freq)
-            half = int((self.sfreq * self.real_wave_length
-                        - wavelet.shape[0]) / 2)
+            half = int((self.wave_length - wavelet.shape[0]) / 2)
             wavelet = ncp.hstack((ncp.zeros(half), wavelet, ncp.zeros(half)))
             result = ncp.fft.fft(wavelet)
             result.imag = ncp.abs(result.imag)
@@ -299,7 +326,7 @@ class WaveletBase:
         formula = self.cp_trans_formula if self.cuda else self.trans_formula
         if self.mode in [CWTMode.Fast]:
             # Make timeline
-            t = ncp.tile(self._setup_trans_shape(real_length, real_length), (freqs.shape[0], 1))
+            t = ncp.tile(self._setup_trans_shape(real_length, self.wave_length), (freqs.shape[0], 1))
             # Make fft wavelets
             many_freqs = ncp.tile(freqs, (t.shape[1], 1)).T
             result = formula(t, many_freqs)
@@ -310,18 +337,6 @@ class WaveletBase:
             return result
         else:
             logger.info('Making ffted wavelet.')
-            # It is slower code. In this case, using tuple was fast.
-
-            # wavelet = self.make_wavelets(freqs)
-            # half = int((self.sfreq * self.real_wave_length
-            #             - wavelet.shape[0]) / 2)
-            # wavelet = ncp.hstack((ncp.zeros((wavelet.shape[0], half)),
-            #                       wavelet, ncp.zeros((wavelet.shape[0], half))))
-            # result = ncp.fft.fft(wavelet)
-            # result.imag = ncp.abs(result.imag)
-            # result.real = ncp.abs(result.real)
-            # return result
-
             self.freq_dist = freqs[1] - freqs[0]
             make_w = partial(self.make_fft_wavelet, real_length=real_length)
             self.fft_wavelets = ncp.array(tuple(map(make_w, freqs)))
@@ -444,7 +459,7 @@ class WaveletBase:
         if freq == 0:
             raise ZeroDivisionError
         if self.mode in [CWTMode.Reverse, CWTMode.Fast]:
-            timeline = self._setup_trans_shape(freq, self.real_wave_length)
+            timeline = self._setup_trans_shape(freq, self.wave_length)
             if self.cuda:
                 wavelet = cp.fft.ifft(self.cp_trans_formula(timeline))
             else:
@@ -480,7 +495,7 @@ class WaveletBase:
         if freqs[0] == 0:
             raise ZeroDivisionError
         if self.mode in [CWTMode.Reverse, CWTMode.Fast]:
-            timelines = ncp.array(tuple(self._setup_trans_shape(freq, self.real_wave_length)
+            timelines = ncp.array(tuple(self._setup_trans_shape(freq, self.wave_length)
                               for freq in freqs))
             if self.cuda:
                 wavelet = cp.fft.ifft(self.cp_trans_formula(timelines))
@@ -519,11 +534,10 @@ class WaveletBase:
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
         reuse_wavelets = False
-        if (self.real_wave_length == wave.shape[0] / self.sfreq) and\
-                (self.freqs is freqs):
+        if (self.wave_length == wave.shape[0]) and (self.freqs is freqs):
             reuse_wavelets = True
         self.freqs = freqs
-        self.real_wave_length = wave.shape[0] / self.sfreq
+        self.wave_length = wave.shape[0]
         if self.mode in [CWTMode.Fast, CWTMode.Normal]:
             if isinstance(wave, cp.ndarray):
                 logger.info('Cuda is enabled.')
