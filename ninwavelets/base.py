@@ -298,7 +298,7 @@ class WaveletBase:
         if self.mode in [CWTMode.Fast]:
             t = self._setup_trans_shape(real_length, self.wave_length)
             result = formula(t, freq)
-            return result / self.get_wavelet_norm(ncp.fft.ifft(result), (1,))
+            return result / self.get_wavelet_norm(ncp.fft.ifft(result), (0,))
         else:
             wavelet = self.make_wavelet(freq)
             half = int((self.wave_length - wavelet.shape[0]) / 2)
@@ -466,7 +466,7 @@ class WaveletBase:
                 wavelet = ifft(self.trans_formula(timeline))
             half = int(wavelet.shape[0])
             start, stop = half // 2, half // 2 * 3
-            total_wavelet = ncp.hstack((ncp.conj(ncp.flip(wavelet)), wavelet))
+            total_wavelet = ncp.hstack((ncp.conj(ncp.flip(wavelet, 0)), wavelet))
             wavelet = total_wavelet[start: stop]
             wavelet /= self.get_wavelet_norm(wavelet)
         else:
