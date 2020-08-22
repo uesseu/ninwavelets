@@ -202,7 +202,7 @@ class WaveletBase:
     '''
 
     def __init__(self, sfreq: float = 1000, real_wave_length: float = 1.,
-                 cuda: bool = False, keep_num: Optional[int] = None) -> None:
+                 cuda: bool = False, keep_num: Optional[int] = 10) -> None:
         '''
         Parameters
         ----------
@@ -503,7 +503,7 @@ class WaveletBase:
                 wavelet = ifft(self.trans_formula(timelines))
             half = int(wavelet.shape[0])
             start, stop = half // 2, half // 2 * 3
-            total_wavelet = ncp.hstack((ncp.conj(ncp.flip(wavelet)), wavelet))
+            total_wavelet = ncp.hstack((ncp.conj(ncp.flip(wavelet, 0)), wavelet))
             wavelet = total_wavelet[start: stop]
             # wavelet /= self.get_wavelet_norm(wavelet)
             divs = ncp.array(self.get_wavelet_norm(wavelet, (1,)))
