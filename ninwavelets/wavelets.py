@@ -40,7 +40,7 @@ class Morse(WaveletBase):
         This param is cutting threshould of wavelets.
     cuda: bool
         Use cuda
-    keep_num: Optional[int]
+    cache_limit: Optional[int]
         Number of wavelets, which will be kept in the instance.
         If it is None, it will keep all the wavelets.
 
@@ -51,9 +51,9 @@ class Morse(WaveletBase):
 
     def __init__(self, sfreq: float = 1000, b: float = 17.5, r: float = 3,
                  real_wave_length: float = 1., cuda: bool = False,
-                 keep_num: Optional[int] = None) -> None:
+                 cache_limit: Optional[int] = 10) -> None:
         super(Morse, self).__init__(sfreq, real_wave_length, cuda,
-                                    keep_num=keep_num)
+                                    cache_limit=cache_limit)
         self.r: float = r
         self.b: float = b
         self.mode = CWTMode.Fast
@@ -121,7 +121,7 @@ class Morlet(WaveletBase):
         Peak wave * length is the length of wavelet.
     cuda: bool
         Use cuda.
-    keep_num: Optional[int]
+    cache_limit: Optional[int]
         Number of wavelets, which will be kept in the instance.
         If it is None, it will keep all the wavelets.
 
@@ -133,9 +133,9 @@ class Morlet(WaveletBase):
     def __init__(self, sfreq: float = 1000, sigma: float = 7.,
                  real_wave_length: float = 1.,
                  gabor: bool = False, cuda: bool = False,
-                 keep_num: Optional[int] = None) -> None:
+                 cache_limit: Optional[int] = 10) -> None:
         super(Morlet, self).__init__(sfreq, real_wave_length, cuda,
-                                     keep_num=keep_num)
+                                     cache_limit=cache_limit)
         self.mode = CWTMode.Fast
         self.sigma = sigma
         self.c = np.float_power(1
@@ -190,7 +190,7 @@ class MexicanHat(WaveletBase):
         Length of wavelet.
     cuda: bool
         Use cuda
-    keep_num: Optional[int]
+    cache_limit: Optional[int]
         Number of wavelets, which will be kept in the instance.
         If it is None, it will keep all the wavelets.
 
@@ -201,9 +201,9 @@ class MexicanHat(WaveletBase):
 
     def __init__(self, sfreq: float = 1000, sigma: float = 7,
                  real_wave_length: float = 1., cuda: bool = False,
-                 keep_num: Optional[int] = None) -> None:
+                 cache_limit: Optional[int] = 10) -> None:
         super(MexicanHat, self).__init__(sfreq, real_wave_length, cuda,
-                                         keep_num=keep_num)
+                                         cache_limit=cache_limit)
         self.sigma: float = sigma
         self.mode = CWTMode.Fast
         self.help = ''
@@ -234,7 +234,7 @@ class Shannon(WaveletBase):
         Length of wavelet.
     cuda: bool
         Use cuda
-    keep_num: Optional[int]
+    cache_limit: Optional[int]
         Number of wavelets, which will be kept in the instance.
         If it is None, it will keep all the wavelets.
 
@@ -245,9 +245,9 @@ class Shannon(WaveletBase):
 
     def __init__(self, sfreq: float = 1000, 
                  real_wave_length: float = 1., cuda: bool = False,
-                 keep_num: Optional[int] = None) -> None:
+                 cache_limit: Optional[int] = 10) -> None:
         super(Shannon, self).__init__(sfreq, real_wave_length, cuda,
-                                      keep_num=keep_num)
+                                      cache_limit=cache_limit)
         self.mode = CWTMode.Fast
         self.help = ''
 
@@ -270,7 +270,7 @@ class Haar(WaveletBase):
         Length of wavelet.
     cuda: bool
         Use cuda
-    keep_num: Optional[int]
+    cache_limit: Optional[int]
         Number of wavelets, which will be kept in the instance.
         If it is None, it will keep all the wavelets.
 
@@ -280,9 +280,9 @@ class Haar(WaveletBase):
     '''
     def __init__(self, sfreq: float = 1000,
                  real_wave_length: float = 1., cuda: bool = False,
-                 keep_num: Optional[int] = None) -> None:
+                 cache_limit: Optional[int] = 10) -> None:
         super(Haar, self).__init__(sfreq, real_wave_length, cuda,
-                                   keep_num=keep_num)
+                                   cache_limit=cache_limit)
         self.mode = CWTMode.Convolve
         self.cuda = cuda
 

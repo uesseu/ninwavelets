@@ -144,7 +144,7 @@ Because cupy 7.6.0 has no method named convolve''')
     t = time()
     result_mne = cwt(np.array([sin]),
                      morlet(1000, np.arange(min_freq, max_freq, 1)),
-                     use_fft=False)[0] ** 2
+                     use_fft=True)[0] ** 2
     print(f'MNE {time() - t}')
 
     if show:
@@ -257,7 +257,7 @@ def eeg(cuda: bool) -> None:
 
 def speed_test(i: int) -> None:
     length = 1
-    repeat = 100
+    repeat = 1
     reg = 10
     t = time()
     sin = make_example(length, False)

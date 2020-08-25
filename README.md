@@ -262,13 +262,14 @@ Morse(self, sfreq: float = 1000,
 
 Parameters
 
-| Param            | Type  | Default |                                                          |
-| --               | --    | --      | --                                                       |
-| sfreq            | float | 1000Hz  | Sampling frequency.                                      |
-| b                | float | 17.5    | beta value                                               |
-| r                | float | 3       | gamma value. 3 may be good value.                        |
-| real_wave_length | float | 10      | Length of wavelet(sec). It is modified when CWT.         |
-| cuda             | bool  | False   | Use cuda or not. See 'Performance of wavelet transform'. |
+| Param            | Type          | Default |                                                          |
+| --               | --            | --      | --                                                       |
+| sfreq            | float         | 1000Hz  | Sampling frequency.                                      |
+| b                | float         | 17.5    | beta value                                               |
+| r                | float         | 3       | gamma value. 3 may be good value.                        |
+| real_wave_length | float         | 10      | Length of wavelet(sec). It is modified when CWT.         |
+| cuda             | bool          | False   | Use cuda or not. See 'Performance of wavelet transform'. |
+| cache_limit      | Optional[int] | 10      | Cache size. If None, cache will be made infinitely.      |
 
 ```python
 morse = Morse(1000)
@@ -500,8 +501,12 @@ class Morlet(WaveletBase):
         return self.sigma / (1. - np.exp(-self.sigma * freq))
 ```
 
-All you should do is write formula.  
+All you should do is write formula and peak_freq.  
 The formulas may be written in mathmatical papers! ;)  
+
+# Logging
+If you want to use your own logger, you can.  
+Methods can catch logging.Logger objects.  
 
 # Advantages and Limitations
 
@@ -535,6 +540,7 @@ Ninwavelets is simple package now, and so,
 it may has less functions than other packages.  
 
 ## Fast coding of ninwavelets
+### Skipping making wavelets
 It is not good for performance to make new wavelets every time,  
 if wave length is not changed every time.  
 And so, it memorizes wavelets after cwt.  
@@ -555,6 +561,17 @@ morse.cwt(wave, freqs)
 
 Making wavelets is not so slow and memorizing wavelets may takes big memory.  
 And so, optionally, you can skip memorizing.  
+
+When you make an instance, use keyword argument, named 'cache_limit'.  
+If cache_limit is 0, it does not remember wavelets.  
+If cache_limit is 10, it remebmers 10 wavelets.  
+If cache_limit is None, it remembers all the wavelets until it will be deleted.  
+
+Using cache becomes slow, if there is too many cache in the instance.  
+Because, looking for cache in the instance takes long time, if there are many wavelets.  
+Further more, it uses id, which is built in function of python.  
+But in practical usage, it may be almost faster.  
+Default value is 10.  
 
 ## Why is it so fast?
 
@@ -631,9 +648,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     + [ ] 2D wavelet
 - [x] Use cuda or cython and speedup!
     + [x] It was cythonized before. But it is not good for scalability.
-    + [x] It may be faster with cupy if you process long wave.
+    + [x] It may be faster with cupy.
+    + [x] Cache will be made after making wavelets.
     + [x] Now, It is extremely fast!
 - [ ] Kill typos(I am a Jap without intelligence and not good at English) ;(
+    + Endless!
 - [x] Licence
     + [x] Whether write my name or not.
         * [x] I wrote one of my handle name.
