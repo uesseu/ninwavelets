@@ -13,7 +13,7 @@ logger.addHandler(NullHandler())
 
 try:
     import cupy as cp
-    from cupyx.scipy.fftpack import get_fft_plan
+    import cupyx.scipy.fftpack as cx_fft
 except ImportError as error:
     print(error)
     print('Cupy could not be loaded.')
@@ -625,12 +625,12 @@ Converting to numpy is too slow. Exit.''')
         -------
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
+        remake_plan = False
         if self.cuda:
             wave = wave.astype(cp.complex)
-        if (not reuse_wavelets) or (self.fft_wavelets is not None):
+        if (not reuse_wavelets) or (self.fft_wavelets is None):
             if self.cuda:
-                # This is a plan to make fast code.
-                self.fft_plan = get_fft_plan(wave, axes=(0,))
+                remake_plan = True
             sid = ''.join((str(wave.shape), str(id(freqs))))
             if sid in self.kept['fft'].keys():
                 self.fft_wavelets = self.kept['fft'][sid]
@@ -644,9 +644,12 @@ Converting to numpy is too slow. Exit.''')
         logger.info('Applying FFT mul.')
         # This 4 lines makes this fast a little.
         if self.cuda:
-            with self.fft_plan:
-                to_ifft = self.fft_wavelets * ncp.fft.fft(wave)
-            return ncp.fft.ifft(to_ifft)
+            if remake_plan:
+                self.fft_plan = cx_fft.get_fft_plan(wave, axes=(0,))
+            to_ifft = self.fft_wavelets * cx_fft.fft(wave, plan=self.fft_plan)
+            if remake_plan:
+                self.ifft_plan = cx_fft.get_fft_plan(to_ifft, axes=(1,))
+            return cx_fft.ifft(to_ifft, plan=self.ifft_plan)
         return ncp.fft.ifft(self.fft_wavelets * ncp.fft.fft(wave))
 
     def power(self, wave: Array, freqs: Array,

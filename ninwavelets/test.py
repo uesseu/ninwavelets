@@ -259,7 +259,7 @@ def eeg(cuda: bool) -> None:
 
 def speed_test(i: int) -> None:
     length = 1
-    repeat = 10
+    repeat = 100
     reg = 10
     t = time()
     sin = make_example(length, False)
@@ -307,8 +307,7 @@ def speed_test(i: int) -> None:
     t = time()
     nin_morlet = Morlet(cuda=True, sfreq=1000)
     for n in range(repeat):
-        print(n)
-        result_morlet = nin_morlet.power(c_sin, c_freqs)
+        result_morlet = nin_morlet.power(c_sin, freqs)
     ninwavelet_time_cuda = time() - t
     print(f'Ninwavelets cuda morlet {ninwavelet_time_cuda}')
 
@@ -350,6 +349,16 @@ def geom_test():
     plt.imshow(result)
     plt.show()
 
+def tune(wave):
+    morse = Morse()
+    for n in range(10):
+        result = morse.power(wave, freqs)
+
+def tune_cuda(wave):
+    morse = Morse(cuda=True)
+    for n in range(10):
+        result = morse.power(wave, freqs)
+
 if __name__ == '__main__':
     print('Test Run')
     # plot_sin_fft()
@@ -390,3 +399,9 @@ if __name__ == '__main__':
         print(f'Async {time() - t}')
     if 'geom' in argv:
         geom_test()
+    if 'tune' in argv:
+        wave = np.random.random(1000)
+        cp_wave = cp.random.random(1000)
+        freqs = np.geomspace(1, 10, 1000)
+        tune(wave)
+        tune_cuda(cp_wave)
