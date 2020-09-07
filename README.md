@@ -33,13 +33,15 @@ Please see Advantages and Limitations.
 - Speed
     + This package is extremely fast for a pure python package.  
     + Cupy makes it extremely fast.  
+        * About One or two order faster than other prevalent packages.
     + Even if you can not use cupy, it is very fast.
+        * About 3 to 15 times faster than other prevalent packages.
 - Reliability
     + Being brand new project, it has no achivement...
     + There may be lots of bugs.
     + Do not rely on it! Read the source code! Test by your self!
 - In heavily debelopment
-    + Destructive change may performed.
+    + Destructive change may be performed.
 
 # Install
 
@@ -95,7 +97,7 @@ morse.cwt(wave, freqs)
 # Purpose and background
 At first, this package was written to perform GMW on mne python.  
 But I wrote CWT. Because GMW needs one inverse FFT for no purpose.  
-Now it has own CWT method.  
+Calculating no purpose is guilt! Now it has own CWT method.  
 And I noticed, it may be good for Morlet Wavelet too.  
 The result resembles that of mne python.  
 
@@ -180,16 +182,20 @@ Formula is like below.
 When Normal mode, it uses fft to calculate fast.
 
 ```
-InverseFFT(Convolve(FFT(wavelet) @ FFT(wave_to_analyze)))
+InverseFFT(Multiply(FFT(wavelet) @ FFT(wave_to_analyze)))
 ```
+
+Calculation volume order is $O(NlogN)$
 
 ### Fast mode
 When Fast mode, it uses fourier transform version of formula.  
 Default for Morlet and GMW.  
 
 ```
-InverseFFT(Convolve(Transformed_wavelet @ FFT(wave_to_analyze)))
+InverseFFT(Multiply(Transformed_wavelet @ FFT(wave_to_analyze)))
 ```
+
+Calculation volume order is $O(NlogN)$
 
 ### Convolve mode
 When Convolve, it yields raw wave by inverse fourier transform.  
@@ -198,6 +204,8 @@ Default for Haar.
 ```
 Convolve(Wavelet @ wave_to_analyze)
 ```
+
+Calculation volume order is $O(N^2)$
 
 But, there is some wavelets, which has no formula of raw wave.  
 For example, GMW is...  
@@ -212,7 +220,8 @@ In this case, it perform inverse fft before convolving.
 Convolve(InverseFFT(Transformed_wavelet) @ wave_to_analyze)
 ```
 
-It seems bad, and this is why I wrote this package.  
+Calculation volume order is $O(N^2)$
+It seems to be bad.  
 
 ### Reverse mode
 Even if there is a formula of wavelet, in this mode,  
@@ -583,6 +592,7 @@ There is some way to write fast code...
 - Skip calculation as much as possible.
 - Skip tranfering data between main memory and GPU.
 - Skip processing by pure python and write in cupy or numpy as much as possible.
+- Use fft.
 
 ## Method
 
@@ -643,12 +653,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     + [x] Haar
     + [x] Scalability for unknown wavelets
 - More methods
-    + [ ] Decimation
+    + [x] Decimation
+        * It will not be written. It must be a user's work.
+        * "Make each program do one thing well."
     + [ ] DWT
     + [ ] 2D wavelet
+- [x] Refactor
+    + [x] Do not use fft derived from multiple packages.
 - [x] Use cuda or cython and speedup!
-    + [x] It was cythonized before. But it is not good for scalability.
-    + [x] It may be faster with cupy.
     + [x] Cache will be made after making wavelets.
     + [x] Now, It is extremely fast!
 - [ ] Kill typos(I am a Jap without intelligence and not good at English) ;(
@@ -659,7 +671,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     + [x] Which licence to use.
         * [x] MIT licence.
 - [ ] CUPY related limitation
-    + [ ] convolve is not allowed in cupy 7.6
+    + Convolve is not allowed in cupy 7.6
+    + But, is it a obligation to use convolve?
 - [x] Logging
 - [ ] Bug fix
     + Endless!

@@ -25,10 +25,12 @@ basicConfig(level=WARNING)
 log = getLogger()
 
 
-def make_example(length: float = 3, cuda: bool = True) -> np.ndarray:
+def make_example(length: float = 3, cuda: bool = True, random: bool = True) -> np.ndarray:
     freq: float = 60
     ncp = cp if cuda else np
     time: ncp.ndarray = ncp.arange(0, length, 0.001)
+    if random:
+        return ncp.random.random(length * 1000)
     sin = ncp.array(ncp.sin(time * freq * 2 * ncp.pi) +
                    ncp.sin(time * 160 * 2 * ncp.pi) * ncp.sin(time * ncp.pi) +
                    ncp.sin(ncp.pad(ncp.arange(0, length / 2, 0.001),
@@ -106,10 +108,10 @@ def plot_sin_fft() -> None:
     plt.show()
 
 
-def cwt_test(cuda: bool = False, show: bool = False) -> None:
+def cwt_test(cuda: bool = False, show: bool = False, random: bool = True) -> None:
     min_freq = 30
     max_freq = 500
-    sin = make_example(4, cuda)
+    sin = make_example(4, cuda, random)
     if cuda:
         sin = cp.asarray(sin)
 
@@ -176,7 +178,7 @@ Because cupy 7.6.0 has no method named convolve''')
     print(f'MNE mean is {np.abs(result_mne).mean()}')
     # result_morse = morse.power(sin, reuse=True)
 
-    plot_tf(result_morlet)
+    plot_tf(result_morse)
     # plt.show()
 
 
@@ -257,7 +259,7 @@ def eeg(cuda: bool) -> None:
 
 def speed_test(i: int) -> None:
     length = 1
-    repeat = 1
+    repeat = 10
     reg = 10
     t = time()
     sin = make_example(length, False)
@@ -305,6 +307,7 @@ def speed_test(i: int) -> None:
     t = time()
     nin_morlet = Morlet(cuda=True, sfreq=1000)
     for n in range(repeat):
+        print(n)
         result_morlet = nin_morlet.power(c_sin, c_freqs)
     ninwavelet_time_cuda = time() - t
     print(f'Ninwavelets cuda morlet {ninwavelet_time_cuda}')
@@ -341,6 +344,11 @@ def speed_test(i: int) -> None:
     plt.title('1sec wave, Sampling frequency:1000Hz\nMorletWavelet(30~500Hz) 100times')
     plt.show()
 
+def geom_test():
+    morse = Morse()
+    result = morse.power(np.random.random(1000), np.geomspace(1, 10, 1000))
+    plt.imshow(result)
+    plt.show()
 
 if __name__ == '__main__':
     print('Test Run')
@@ -380,3 +388,5 @@ if __name__ == '__main__':
         for n in range(100):
             np2cp(*data)
         print(f'Async {time() - t}')
+    if 'geom' in argv:
+        geom_test()

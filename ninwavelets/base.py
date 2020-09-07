@@ -1,7 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.fftpack import ifft, fft
-from scipy import fftpack
 from typing import Union, List, Iterator, Callable, Tuple, cast, Optional, Dict
 from enum import Enum
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -15,6 +13,7 @@ logger.addHandler(NullHandler())
 
 try:
     import cupy as cp
+    from cupyx.scipy.fftpack import get_fft_plan
 except ImportError as error:
     print(error)
     print('Cupy could not be loaded.')
@@ -46,9 +45,9 @@ def np2cp(*npdata: np.ndarray) -> cp.ndarray:
     >>> set_of_data = [first, second]
     >>> cp_first, cp_second = np2cp(*set_of_data)
     '''
-    copy_npdata = tuple(cp_alloc(npd) for npd in npdata)
-    cupy_mem = tuple(cp.ndarray(npd.shape, npd.dtype) for npd in npdata)
-    streams = tuple(cp.cuda.Stream(non_blocking=True) for npd in npdata)
+    copy_npdata = (cp_alloc(npd) for npd in npdata)
+    cupy_mem = (cp.ndarray(npd.shape, npd.dtype) for npd in npdata)
+    streams = (cp.cuda.Stream(non_blocking=True) for npd in npdata)
     tuple(cmem.set(cnpd, stream) for cmem, cnpd, stream in zip(cupy_mem, copy_npdata, streams))
     tuple(stream.synchronize() for stream in streams)
     return cupy_mem
@@ -232,8 +231,7 @@ class WaveletBase:
         self.fft_wavelets: Optional[Array] = None
         self.wavelets: Optional[Array] = None
 
-    def _setup_trans_shape(self, freq: float,
-                           wave_length: int) -> Array:
+    def _setup_trans_shape(self, freq: float, wave_length: int) -> Array:
         '''
         Setup wave shape.
         real_length is length of wavelet(for example, sec or msec)
@@ -275,12 +273,10 @@ class WaveletBase:
         -------
         Tuple[float, float]: (one, total)
         '''
-        if zero_mean:
-            result = np.arange(-self.wave_length / 2, self.wave_length / 2, 1)\
-                * (2 * freq * np.pi / (self.peak_freq(freq) * self.sfreq))
-        else:
-            result = np.arange(0., self.wave_length, 1)\
-                * (2 * freq * np.pi / (self.peak_freq(freq) * self.sfreq))
+        times = (-self.wave_length / 2, self.wave_length / 2, 1) if zero_mean\
+            else (0., self.wave_length, 1)
+        result = np.arange(*times)\
+            * (2 * freq * np.pi / (self.peak_freq(freq) * self.sfreq))
         return cp.asarray(result, np.float64) if self.cuda else result
 
     def peak_freq(self, freq: float) -> float:
@@ -333,7 +329,9 @@ class WaveletBase:
         formula = self.cp_trans_formula if self.cuda else self.trans_formula
         if self.mode in [CWTMode.Fast]:
             # Make timeline
-            t = ncp.tile(self._setup_trans_shape(real_length, self.wave_length), (freqs.shape[0], 1))
+            t = ncp.tile(
+                self._setup_trans_shape(real_length, self.wave_length),
+                (freqs.shape[0], 1))
             # Make fft wavelets
             many_freqs = ncp.tile(freqs, (t.shape[1], 1)).T
             result = formula(t, many_freqs)
@@ -436,7 +434,8 @@ class WaveletBase:
         '''
         return freqs
 
-    def get_wavelet_norm(self, wavelet: Array, axis: Optional[tuple] = None) -> Array:
+    def get_wavelet_norm(self, wavelet: Array,
+                         axis: Optional[tuple] = None) -> Array:
         '''
         Get norm of wavelet.
 
@@ -470,7 +469,7 @@ class WaveletBase:
             if self.cuda:
                 wavelet = cp.fft.ifft(self.cp_trans_formula(timeline))
             else:
-                wavelet = ifft(self.trans_formula(timeline))
+                wavelet = np.fft.ifft(self.trans_formula(timeline))
             half = int(wavelet.shape[0])
             start, stop = half // 2, half // 2 * 3
             wavelet = ncp.hstack((ncp.conj(ncp.flip(wavelet, 0)),
@@ -508,17 +507,17 @@ class WaveletBase:
             if self.cuda:
                 wavelet = cp.fft.ifft(self.cp_trans_formula(timelines))
             else:
-                wavelet = ifft(self.trans_formula(timelines))
+                wavelet = np.fft.ifft(self.trans_formula(timelines))
             half = int(wavelet.shape[0])
             start, stop = half // 2, half // 2 * 3
-            wavelet = ncp.hstack((ncp.conj(ncp.flip(wavelet, 0)),
-                                        wavelet))[start: stop]
+            wavelet = ncp.hstack(
+                (ncp.conj(ncp.flip(wavelet, 0)), wavelet))[start: stop]
             norms = ncp.array(self.get_wavelet_norm(wavelet, (1,)))
             wavelet /= ncp.tile(norms, (wavelet.shape[1], 1)).T
         else:
-            timeline = ncp.array([self._setup_waveletshape(freq, 1,
-                                                           zero_mean=True)
-                                  for freq in freqs])
+            timeline = ncp.array(
+                [self._setup_waveletshape(freq, 1, zero_mean=True)
+                 for freq in freqs])
             formula = self.cp_formula if self.cuda else self.formula
             wavelet = formula(timeline, freqs)
             divs = ncp.array(self.get_wavelet_norm(wavelet, (1,)))
@@ -597,16 +596,17 @@ Converting to numpy is too slow. Exit.''')
                 self.wavelets = self.kept['wavelet'][sid]
             else:
                 self.make_wavelets(freqs)
-                if (self.cache_limit is None) or self.cache_limit > len(self.kept['wavelet']):
+                if ((self.cache_limit is None)
+                        or self.cache_limit > len(self.kept['wavelet'])):
                     self.kept['wavelet'].update({sid: self.wavelets})
         logger.info('Applying convolve.')
         return ncp.array([ncp.convolve(w, wave, 'same')
-                          for w in self.wavelets])
+                          for w in cast(Array, self.wavelets)])
 
     def cwt_fft(self, wave: Array, freqs: Numbers,
                 reuse_wavelets: bool = True, logger: Logger = logger) -> Array:
         '''cwt
-        Run CWT.
+        Run CWT based on fft.
 
         wave: np.ndarray
             Wave to analyze
@@ -625,19 +625,29 @@ Converting to numpy is too slow. Exit.''')
         -------
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
+        if self.cuda:
+            wave = wave.astype(cp.complex)
         if (not reuse_wavelets) or (self.fft_wavelets is not None):
+            if self.cuda:
+                # This is a plan to make fast code.
+                self.fft_plan = get_fft_plan(wave, axes=(0,))
             sid = ''.join((str(wave.shape), str(id(freqs))))
             if sid in self.kept['fft'].keys():
                 self.fft_wavelets = self.kept['fft'][sid]
             else:
                 self.make_fft_wavelets(freqs, wave.shape[0] / self.sfreq)
-                if(self.cache_limit is None) or self.cache_limit > len(self.kept['fft']):
+                if((self.cache_limit is None) or
+                   self.cache_limit > len(self.kept['fft'])):
                     self.kept['fft'].update({sid: self.fft_wavelets})
-        fft = cp.fft.ifft if self.cuda else fftpack.ifft
-        ifft = cp.fft.fft if self.cuda else fftpack.fft
+        ncp = cp if self.cuda else np
         self._freqs = freqs
         logger.info('Applying FFT mul.')
-        return ifft(self.fft_wavelets * fft(wave))
+        # This 4 lines makes this fast a little.
+        if self.cuda:
+            with self.fft_plan:
+                to_ifft = self.fft_wavelets * ncp.fft.fft(wave)
+            return ncp.fft.ifft(to_ifft)
+        return ncp.fft.ifft(self.fft_wavelets * ncp.fft.fft(wave))
 
     def power(self, wave: Array, freqs: Array,
               logger: Logger = logger) -> Array:
@@ -709,7 +719,8 @@ Converting to numpy is too slow. Exit.''')
         logger.info('Plotting wavelet')
         return plot_wavelet(self, freq, show)
 
-    def set_mode(self, mode: CWTMode, logger: Logger = logger) -> 'WaveletBase':
+    def set_mode(self, mode: CWTMode,
+                 logger: Logger = logger) -> 'WaveletBase':
         '''
         Just set mode.
         >>> morse = Morse().set_mode(CWTMode.Fast)
@@ -748,7 +759,7 @@ def plot_wavelet(wavelet_obj: WaveletBase, freq: float,
     logger.info('Plotting wavelet.')
     freqs = np.array([freq])
     plt_num = 3 if wavelet_obj.help else 2
-    wavelet = wavelet_obj.make_wavelets(freqs)[0]
+    wavelet = wavelet_obj.make_wavelet(freqs)
     fig = plt.figure(figsize=(6, 8))
     ax = fig.add_subplot(plt_num, 1, 1)
     ax.plot(np.arange(0, wavelet.shape[0], 1), wavelet, label='morse')
@@ -788,7 +799,8 @@ def plot_tf(data: Array, sfreq: float = 1000,
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
     if ylabels:
-        ax.set_yticks(np.arange(0, data.shape[0], data.shape[0] / ylabels.shape))
+        ax.set_yticks(np.arange(0, data.shape[0],
+                                data.shape[0] / ylabels.shape))
         ax.set_yticklabels(ylabels)
     image = ax.imshow(data, vmin=vmin, vmax=vmax, cmap=cmap)
     ax.invert_yaxis()
