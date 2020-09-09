@@ -6,6 +6,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from functools import partial, reduce
 from operator import mul
 from logging import getLogger, INFO, basicConfig, NullHandler, Logger
+from abc import abstractmethod
 import gc
 
 logger = getLogger('ninwavelets')
@@ -279,6 +280,7 @@ class WaveletBase:
             * (2 * freq * np.pi / (self.peak_freq(freq) * self.sfreq))
         return cp.asarray(result, np.float64) if self.cuda else result
 
+    @abstractmethod
     def peak_freq(self, freq: float) -> float:
         return 1.
 
@@ -347,6 +349,7 @@ class WaveletBase:
             self.fft_wavelets = ncp.array(tuple(map(make_w, freqs)))
             return self.fft_wavelets
 
+    @abstractmethod
     def formula(self, timeline: Array, freq: Union[Array, float]) -> Array:
         ''' formula
         The formula of Wavelet.
@@ -369,6 +372,7 @@ class WaveletBase:
         '''
         return timeline
 
+    @abstractmethod
     def cp_formula(self, timeline: Array, freq: Union[Array, float]) -> Array:
         ''' formula
         The formula of Wavelet.
@@ -391,6 +395,7 @@ class WaveletBase:
         '''
         return timeline
 
+    @abstractmethod
     def trans_formula(self, freqs: Iterator[float],
                       freq: Union[Array, float] = 1.) -> Array:
         ''' trans_formula
@@ -412,6 +417,7 @@ class WaveletBase:
         '''
         return freqs
 
+    @abstractmethod
     def cp_trans_formula(self, freqs: Iterator[float],
                          freq: Union[Array, float] = 1.) -> Array:
         ''' trans_formula
