@@ -6,7 +6,6 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from functools import partial, reduce
 from operator import mul
 from logging import getLogger, INFO, basicConfig, NullHandler, Logger
-from abc import abstractmethod
 import gc
 
 logger = getLogger('ninwavelets')
@@ -195,13 +194,109 @@ class CWTMode(Enum):
 
     # Convolve(ifft(ffted_wavelet) @ wave)
 
+class WaveletFormula:
+    """
+    Something like an ABC of 'WaveletGenerator' class.
+    But, ABC needs to inheriting functions.
+    There is some wavelets which has no normal formula.
+    And so, it is not written as ABC.
+    """
+    def peak_freq(self, freq: float) -> float:
+        return 1.
 
-class WaveletBase:
-    '''
-    Base class of wavelets.
-    You need to write methods to make single wavelet.
-    '''
+    def formula(self, timeline: Array, freq: Union[Array, float]) -> Array:
+        ''' formula
+        The formula of Wavelet.
+        Other procedures are performed by other methods.
 
+        Parameters
+        ----------
+        timeline: np.ndarray[np.float, ndim=1]
+            Time value of formula.
+        freq: float
+            If you want to setup peak frequency,
+            this variable may be useful.
+
+        Returns
+        -------
+        Base of wavelet.
+            timeline: np.ndarray:
+
+        freq: float:
+        '''
+        return timeline
+
+    def cp_formula(self, timeline: Array, freq: Union[Array, float]) -> Array:
+        ''' formula
+        The formula of Wavelet.
+        Other procedures are performed by other methods.
+
+        Parameters
+        ----------
+        timeline: np.ndarray[np.float, ndim=1]
+            Time value of formula.
+        freq: float
+            If you want to setup peak frequency,
+            this variable may be useful.
+
+        Returns
+        -------
+        Base of wavelet.
+            timeline: np.ndarray:
+
+        freq: float:
+        '''
+        return timeline
+
+    def trans_formula(self, freqs: Iterator[float],
+                      freq: Union[Array, float] = 1.) -> Array:
+        ''' trans_formula
+        The formula of Fourier Transformed Wavelet.
+        Other procedures are performed by other methods.
+
+        Parameters
+        ----------
+        freqs: np.ndarray[np.float, ndim=1]
+            Frequencies.
+            If length of time is same as freqs, It is easy to write.
+        freq: float
+            If you want to setup peak frequency,
+            this variable may be useful.
+
+        Returns
+        -------
+        Base of wavelet: np.ndarray:
+        '''
+        return freqs
+
+    def cp_trans_formula(self, freqs: Iterator[float],
+                         freq: Union[Array, float] = 1.) -> Array:
+        ''' trans_formula
+        The formula of Fourier Transformed Wavelet.
+        Other procedures are performed by other methods.
+        This is method with cupy.
+
+        Parameters
+        ----------
+        freqs: np.ndarray[np.float, ndim=1]
+            Frequencies.
+            If length of time is same as freqs, It is easy to write.
+        freq: float
+            If you want to setup peak frequency,
+            this variable may be useful.
+
+        Returns
+        -------
+        Base of wavelet: np.ndarray:
+        '''
+        return freqs
+
+
+class WaveletGenerator(WaveletFormula):
+    """
+    Generator of wavelets.
+    It is used as base class of 'WaveletBase'.
+    """
     def __init__(self, sfreq: float = 1000, real_wave_length: float = 1.,
                  cuda: bool = False, cache_limit: Optional[int] = 10) -> None:
         '''
@@ -280,10 +375,6 @@ class WaveletBase:
             * (2 * freq * np.pi / (self.peak_freq(freq) * self.sfreq))
         return cp.asarray(result, np.float64) if self.cuda else result
 
-    @abstractmethod
-    def peak_freq(self, freq: float) -> float:
-        return 1.
-
     def make_fft_wavelet(self, freq: float, real_length: float = 1.) -> Array:
         ''' Make single FFTed wavelet.
 
@@ -348,97 +439,6 @@ class WaveletBase:
             make_w = partial(self.make_fft_wavelet, real_length=real_length)
             self.fft_wavelets = ncp.array(tuple(map(make_w, freqs)))
             return self.fft_wavelets
-
-    @abstractmethod
-    def formula(self, timeline: Array, freq: Union[Array, float]) -> Array:
-        ''' formula
-        The formula of Wavelet.
-        Other procedures are performed by other methods.
-
-        Parameters
-        ----------
-        timeline: np.ndarray[np.float, ndim=1]
-            Time value of formula.
-        freq: float
-            If you want to setup peak frequency,
-            this variable may be useful.
-
-        Returns
-        -------
-        Base of wavelet.
-            timeline: np.ndarray:
-
-        freq: float:
-        '''
-        return timeline
-
-    @abstractmethod
-    def cp_formula(self, timeline: Array, freq: Union[Array, float]) -> Array:
-        ''' formula
-        The formula of Wavelet.
-        Other procedures are performed by other methods.
-
-        Parameters
-        ----------
-        timeline: np.ndarray[np.float, ndim=1]
-            Time value of formula.
-        freq: float
-            If you want to setup peak frequency,
-            this variable may be useful.
-
-        Returns
-        -------
-        Base of wavelet.
-            timeline: np.ndarray:
-
-        freq: float:
-        '''
-        return timeline
-
-    @abstractmethod
-    def trans_formula(self, freqs: Iterator[float],
-                      freq: Union[Array, float] = 1.) -> Array:
-        ''' trans_formula
-        The formula of Fourier Transformed Wavelet.
-        Other procedures are performed by other methods.
-
-        Parameters
-        ----------
-        freqs: np.ndarray[np.float, ndim=1]
-            Frequencies.
-            If length of time is same as freqs, It is easy to write.
-        freq: float
-            If you want to setup peak frequency,
-            this variable may be useful.
-
-        Returns
-        -------
-        Base of wavelet: np.ndarray:
-        '''
-        return freqs
-
-    @abstractmethod
-    def cp_trans_formula(self, freqs: Iterator[float],
-                         freq: Union[Array, float] = 1.) -> Array:
-        ''' trans_formula
-        The formula of Fourier Transformed Wavelet.
-        Other procedures are performed by other methods.
-        This is method with cupy.
-
-        Parameters
-        ----------
-        freqs: np.ndarray[np.float, ndim=1]
-            Frequencies.
-            If length of time is same as freqs, It is easy to write.
-        freq: float
-            If you want to setup peak frequency,
-            this variable may be useful.
-
-        Returns
-        -------
-        Base of wavelet: np.ndarray:
-        '''
-        return freqs
 
     def get_wavelet_norm(self, wavelet: Array,
                          axis: Optional[tuple] = None) -> Array:
@@ -531,47 +531,11 @@ class WaveletBase:
         self.wavelets = wavelet
         return wavelet
 
-
-    def cwt(self, wave: Array, freqs: Union[Numbers, None],
-            logger: Logger = logger) -> Array:
-        '''Perform CWT
-
-        Parameters
-        ----------
-        wave: Union[np.ndarray, cp.ndarray]
-            Raw wave to transform.
-        freqs: List[float]
-            Frequencies.
-        logger: Logger
-            logger
-
-        Returns
-        -------
-        Result of CWT: Union[np.ndarray, cp.ndarray]
-        '''
-        reuse_wavelets = False
-        if (self.wave_length == wave.shape[0]) and (self.freqs is freqs):
-            reuse_wavelets = True
-        self.freqs = freqs
-        self.wave_length = wave.shape[0]
-        if self.mode in [CWTMode.Fast, CWTMode.Normal]:
-            if isinstance(wave, cp.ndarray):
-                logger.info('Cuda is enabled.')
-                self.cuda = True
-            return self.cwt_fft(wave, freqs, reuse_wavelets, logger)
-        if self.cuda:
-            logger.warn('''
-Cuda is disabled, because cupy cannot convolve in this version.
-Numpy will be used.''')
-            self.cuda = False
-        if isinstance(wave, cp.ndarray):
-            logger.error('''
-Cuda is disabled, but the wave is cupy.ndarray.
-In this version, in Convolve mode, cuda is disabled.
-Converting to numpy is too slow. Exit.''')
-            raise TypeError('Normal mode cannot use cupy.')
-        return self.cwt_convolve(wave, freqs, reuse_wavelets, logger)
-
+class WaveletConvolver(WaveletGenerator):
+    """
+    CWT class which performs cwt by convolve.
+    It is very slow.
+    """
     def cwt_convolve(self, wave: Array, freqs: Numbers,
                      reuse_wavelets: bool, logger: Logger = logger) -> Array:
         '''
@@ -609,6 +573,11 @@ Converting to numpy is too slow. Exit.''')
         return ncp.array([ncp.convolve(w, wave, 'same')
                           for w in cast(Array, self.wavelets)])
 
+class WaveletMultiplier(WaveletGenerator):
+    """
+    CWT class which performs cwt by fft.
+    """
+
     def cwt_fft(self, wave: Array, freqs: Numbers,
                 reuse_wavelets: bool = True, logger: Logger = logger) -> Array:
         '''cwt
@@ -634,6 +603,7 @@ Converting to numpy is too slow. Exit.''')
         remake_plan = False
         if self.cuda:
             wave = wave.astype(cp.complex)
+        # This if statement can not be method, for performance.
         if (not reuse_wavelets) or (self.fft_wavelets is None):
             if self.cuda:
                 remake_plan = True
@@ -657,6 +627,83 @@ Converting to numpy is too slow. Exit.''')
                 self.ifft_plan = cx_fft.get_fft_plan(to_ifft, axes=(1,))
             return cx_fft.ifft(to_ifft, plan=self.ifft_plan)
         return ncp.fft.ifft(self.fft_wavelets * ncp.fft.fft(wave))
+
+    def fourier_cwt(self, wave: Array, freqs: Numbers,
+                reuse_wavelets: bool = True, logger: Logger = logger) -> Array:
+        """
+        CWT for wave which is already fourier transformed.
+        """
+        remake_plan = False
+        self.wave_length = wave.shape[0]
+        if self.cuda:
+            wave = wave.astype(cp.complex)
+        # This if statement can not be method, for performance.
+        if (not reuse_wavelets) or (self.fft_wavelets is None):
+            if self.cuda:
+                remake_plan = True
+            sid = ''.join((str(wave.shape), str(id(freqs))))
+            if sid in self.kept['fft'].keys():
+                self.fft_wavelets = self.kept['fft'][sid]
+            else:
+                self.make_fft_wavelets(freqs, wave.shape[0] / self.sfreq)
+                if ((self.cache_limit is None) or
+                    self.cache_limit > len(self.kept['fft'])):
+                    self.kept['fft'].update({sid: self.fft_wavelets})
+        ncp = cp if self.cuda else np
+        self._freqs = freqs
+        logger.info('Applying FFT mul.')
+        # This 4 lines makes this fast a little.
+        # if self.cuda:
+        #     if remake_plan:
+        #         self.ifft_plan = cx_fft.get_fft_plan(wave, axes=(1,))
+        #     return cx_fft.ifft(wave, plan=self.ifft_plan)
+        return ncp.fft.ifft(self.fft_wavelets * wave)
+
+class WaveletBase(WaveletConvolver, WaveletMultiplier):
+    '''
+    Base class of wavelets.
+    You need to write methods to make single wavelet.
+    '''
+
+    def cwt(self, wave: Array, freqs: Union[Numbers, None],
+            logger: Logger = logger) -> Array:
+        '''Perform CWT
+
+        Parameters
+        ----------
+        wave: Union[np.ndarray, cp.ndarray]
+            Raw wave to transform.
+        freqs: List[float]
+            Frequencies.
+        logger: Logger
+            logger
+
+        Returns
+        -------
+        Result of CWT: Union[np.ndarray, cp.ndarray]
+        '''
+        reuse_wavelets = False
+        if (self.wave_length == wave.shape[-1]) and (self.freqs is freqs):
+            reuse_wavelets = True
+        self.freqs = freqs
+        self.wave_length = wave.shape[-1]
+        if self.mode in [CWTMode.Fast, CWTMode.Normal]:
+            if isinstance(wave, cp.ndarray):
+                logger.info('Cuda is enabled.')
+                self.cuda = True
+            return self.cwt_fft(wave, freqs, reuse_wavelets, logger)
+        if self.cuda:
+            logger.warn('''
+Cuda is disabled, because cupy cannot convolve in this version.
+Numpy will be used.''')
+            self.cuda = False
+        if isinstance(wave, cp.ndarray):
+            logger.error('''
+Cuda is disabled, but the wave is cupy.ndarray.
+In this version, in Convolve mode, cuda is disabled.
+Converting to numpy is too slow. Exit.''')
+            raise TypeError('Normal mode cannot use cupy.')
+        return self.cwt_convolve(wave, freqs, reuse_wavelets, logger)
 
     def power(self, wave: Array, freqs: Array,
               logger: Logger = logger) -> Array:
