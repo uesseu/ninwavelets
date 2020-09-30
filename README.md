@@ -594,6 +594,15 @@ There is some way to write fast code...
 - Skip processing by pure python and write in cupy or numpy as much as possible.
 - Use fft.
 
+## There are some anti-patterns
+Code is ugly with anti-patterns.  
+Unfortunately, these anti-patterns are needed for speed.  
+I tested, and good code slowed calculation down.(T_T)  
+Such anti-patterns makes it 1.5 times faster.  
+
+Do you like beutiful code? Of course I like it.  
+But ninwavelet is an "extreme fast CWT python package" and it is impossible to compromise.  
+
 ## Method
 
 Some mathmaticians may say, DFT is not precise way.  

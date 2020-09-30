@@ -259,7 +259,7 @@ def eeg(cuda: bool) -> None:
 
 def speed_test(i: int) -> None:
     length = 1
-    repeat = 100
+    repeat = 10
     reg = 10
     t = time()
     sin = make_example(length, False)
@@ -312,7 +312,7 @@ def speed_test(i: int) -> None:
     print(f'Ninwavelets cuda morlet {ninwavelet_time_cuda}')
 
     t = time()
-    nin_morlet = Morlet(cuda=False, sfreq=1000)
+    nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=0)
     for n in range(repeat):
         result_morlet = nin_morlet.power(sin, np.arange(30, 500, 1))
     ninwavelet_time_slow = time() - t
@@ -339,8 +339,8 @@ def speed_test(i: int) -> None:
             1 / np.array([pywavelet_time, scipy_time, mne_time, swan_time, ninwavelet_time_slow, ninwavelet_time, ninwavelet_time_cuda]),
             tick_label=['PyWavelet', 'Scipy', 'MNE', 'Swan', 'Ninwavelets\nSlow', 'Ninwavelets', 'Ninwavelets\nCuda'])
     plt.xlabel('Packages')
-    plt.ylabel('Speed. (100trial / sec) Bigger is fast.')
-    plt.title('1sec wave, Sampling frequency:1000Hz\nMorletWavelet(30~500Hz) 100times')
+    plt.ylabel(f'Speed. ({repeat}trial / sec) Bigger is fast.')
+    plt.title(f'1sec wave, Sampling frequency:1000Hz\nMorletWavelet(30~500Hz) {repeat}times')
     plt.show()
 
 def geom_test():
