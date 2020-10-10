@@ -1,4 +1,4 @@
-from .base import WaveletBase, CWTMode
+from .base import WaveletBase, CWTMode, WaveletFormula
 from typing import Union, List, cast, Optional
 import numpy as np
 try:
@@ -8,11 +8,41 @@ except ImportError as error:
     print('Cupy could not be loaded.')
 
 
+class MorseFormula(WaveletFormula):
+    def __init__(self, r: float, b: float) -> None:
+        self.r: float = r
+        self.b: float = b
+
+    def cp_trans_formula(self, freqs: cp.ndarray,
+                         freq: float = 1.) -> cp.ndarray:
+        np_freqs = cp.asnumpy(freqs)
+        step = cp.asarray(np.heaviside(np_freqs, np_freqs))
+        freqs = freqs / freq
+        wave = 2. * (step * cp.power(freqs, self.b) *
+                     cp.exp((self.b / self.r) *
+                            (1.
+                             - cp.power(freqs, self.r))
+                            ))
+        return wave
+
+    def trans_formula(self, freqs: np.ndarray, freq: float = 1.) -> np.ndarray:
+        '''
+        Make Fourier transformed morse wavelet.
+        '''
+        freqs = freqs / freq
+        step = np.heaviside(freqs, freqs)
+        wave = 2. * (step * np.float_power(freqs, self.b)
+                     * np.exp((self.b / self.r)
+                              * (1. - np.float_power(freqs, self.r))))
+        return wave
+
 class Morse(WaveletBase):
     '''
     Morse Wavelets.
     It is new wavelet, which is orthonormal.
     Unlike Morlet Wavelets, it is robust for any parameters.
+    Originally, Generalized Morse wavelet is
+    Frourier transformed wave.
 
     Example.
     >>> morse = Morse(1000, r=3., b=17.5)
@@ -48,42 +78,52 @@ class Morse(WaveletBase):
     -------
     As constructor, Morse instance its self.
     '''
-
     def __init__(self, sfreq: float = 1000, b: float = 17.5, r: float = 3,
                  real_wave_length: float = 1., cuda: bool = False,
                  cache_limit: Optional[int] = 10) -> None:
         super(Morse, self).__init__(sfreq, real_wave_length, cuda,
                                     cache_limit=cache_limit)
-        self.r: float = r
-        self.b: float = b
+        self.formula = MorseFormula(r, b)
         self.mode = CWTMode.Fast
-        self.help = '''This is inverse Fourier transformed MorseWavelet.
-Originally, Generalized Morse wavelet is
-Frourier transformed wave.
-'''
+
+
+class MorletFormula(WaveletFormula):
+    def __init__(self, sigma: float = 7.,
+                 gabor: bool = False) -> None:
+        self.sigma = sigma
+        self.c = np.float_power(1
+                                + np.exp(-np.square(self.sigma))
+                                - 2 * np.exp(-3 / 4 * np.square(self.sigma)),
+                                -1/2)
+        self.k = 0 if gabor else np.exp(-np.float_power(self.sigma, 2) / 2)
 
     def cp_trans_formula(self, freqs: cp.ndarray,
                          freq: float = 1.) -> cp.ndarray:
-        np_freqs = cp.asnumpy(freqs)
-        step = cp.asarray(np.heaviside(np_freqs, np_freqs))
-        freqs = freqs / freq
-        wave = 2. * (step * cp.power(freqs, self.b) *
-                     cp.exp((self.b / self.r) *
-                            (1.
-                             - cp.power(freqs, self.r))
-                            ))
-        return wave
+        peak_freq = self.sigma / (1. - cp.exp(-self.sigma * freq))
+        freqs = freqs / freq * peak_freq
+        result = (self.c * cp.pi ** (-1/4) *
+                  (cp.exp(-cp.square(self.sigma-freqs) / 2) -
+                   self.k * cp.exp(-cp.square(freqs) / 2)))
+        return result
 
-    def trans_formula(self, freqs: np.ndarray, freq: float = 1.) -> np.ndarray:
-        '''
-        Make Fourier transformed morse wavelet.
-        '''
-        freqs = freqs / freq
-        step = np.heaviside(freqs, freqs)
-        wave = 2. * (step * np.float_power(freqs, self.b)
-                     * np.exp((self.b / self.r)
-                              * (1. - np.float_power(freqs, self.r))))
-        return wave
+    def trans_formula(self, freqs: np.ndarray, freq: float = 1) -> np.ndarray:
+        freqs = freqs / freq * self.peak_freq(freq)
+        return (self.c * np.float_power(np.pi, -1/4)
+                * (np.exp(-np.square(self.sigma-freqs) / 2)
+                   - self.k * np.exp(-np.square(freqs) / 2)))
+
+    def cp_formula(self, timeline: cp.ndarray, freq: float = 1) -> np.ndarray:
+        return (self.c * (cp.pi ** (-1 / 4))
+                * cp.exp(-cp.square(timeline) / 2)
+                * (cp.exp(self.sigma * 1j * timeline) - self.k))
+
+    def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
+        return (self.c * np.float_power(np.pi, (-1 / 4))
+                * np.exp(-np.square(timeline) / 2)
+                * (np.exp(self.sigma * 1j * timeline) - self.k))
+
+    def peak_freq(self, freq: np.ndarray) -> np.ndarray:
+        return self.sigma / (1. - np.exp(-self.sigma * freq))
 
 
 class Morlet(WaveletBase):
@@ -136,43 +176,23 @@ class Morlet(WaveletBase):
                  cache_limit: Optional[int] = 10) -> None:
         super(Morlet, self).__init__(sfreq, real_wave_length, cuda,
                                      cache_limit=cache_limit)
+        self.formula = MorletFormula(sigma, gabor)
         self.mode = CWTMode.Fast
+
+class MexicanHatFormula(WaveletFormula):
+    def __init__(self, sigma: float) -> None:
         self.sigma = sigma
-        self.c = np.float_power(1
-                                + np.exp(-np.square(self.sigma))
-                                - 2 * np.exp(-3 / 4 * np.square(self.sigma)),
-                                -1/2)
-        self.k = 0 if gabor else np.exp(-np.float_power(self.sigma, 2) / 2)
 
-    def cp_trans_formula(self, freqs: cp.ndarray,
-                         freq: float = 1.) -> cp.ndarray:
-        peak_freq = self.sigma / (1. - cp.exp(-self.sigma * freq))
-        freqs = freqs / freq * peak_freq
-        result = (self.c * cp.pi ** (-1/4) *
-                  (cp.exp(-cp.square(self.sigma-freqs) / 2) -
-                   self.k * cp.exp(-cp.square(freqs) / 2)))
-        return result
+    def formula(self, tc: np.ndarray, freq: float = 1) -> np.ndarray:
+        return ((1 - np.power(tc / self.sigma, 2))
+                * np.exp(-np.square(tc) / np.square(self.sigma) / 2))
 
-    def trans_formula(self, freqs: np.ndarray, freq: float = 1) -> np.ndarray:
-        freqs = freqs / freq * self.peak_freq(freq)
-        return (self.c * np.float_power(np.pi, -1/4)
-                * (np.exp(-np.square(self.sigma-freqs) / 2)
-                   - self.k * np.exp(-np.square(freqs) / 2)))
-
-    def cp_formula(self, timeline: cp.ndarray, freq: float = 1) -> np.ndarray:
-        return (self.c * (cp.pi ** (-1 / 4))
-                * cp.exp(-cp.square(timeline) / 2)
-                * (cp.exp(self.sigma * 1j * timeline) - self.k))
-
-    def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
-        return (self.c * np.float_power(np.pi, (-1 / 4))
-                * np.exp(-np.square(timeline) / 2)
-                * (np.exp(self.sigma * 1j * timeline) - self.k))
+    def cp_formula(self, tc: np.ndarray, freq: float = 1) -> np.ndarray:
+        return ((1 - cp.power(tc / self.sigma, 2))
+                * cp.exp(-cp.square(tc) / cp.square(self.sigma) / 2))
 
     def peak_freq(self, freq: float) -> float:
-        return self.sigma / (1. - np.exp(-self.sigma * freq))
-
-
+        return cast(float, np.sqrt(6.) / (np.pi ** 2))
 
 class MexicanHat(WaveletBase):
     '''
@@ -206,20 +226,12 @@ class MexicanHat(WaveletBase):
                                          cache_limit=cache_limit)
         self.sigma: float = sigma
         self.mode = CWTMode.Fast
-        self.help = ''
-        self.cuda = cuda
+        self.formula = MexicanHatFormula(sigma)
 
-    def formula(self, tc: np.ndarray, freq: float = 1) -> np.ndarray:
-        return ((1 - np.power(tc / self.sigma, 2))
-                * np.exp(-np.square(tc) / np.square(self.sigma) / 2))
 
-    def cp_formula(self, tc: np.ndarray, freq: float = 1) -> np.ndarray:
-        return ((1 - cp.power(tc / self.sigma, 2))
-                * cp.exp(-cp.square(tc) / cp.square(self.sigma) / 2))
-
-    def peak_freq(self, freq: float) -> float:
-        return cast(float, np.sqrt(6.) / (np.pi ** 2))
-
+class ShannonFormula(WaveletFormula):
+    def trans_formula(self, tc: np.ndarray, freq: float = 1) -> np.ndarray:
+        return np.where(tc <= 1., 1., 0)
 
 class Shannon(WaveletBase):
     '''
@@ -249,11 +261,15 @@ class Shannon(WaveletBase):
         super(Shannon, self).__init__(sfreq, real_wave_length, cuda,
                                       cache_limit=cache_limit)
         self.mode = CWTMode.Fast
-        self.help = ''
+        self.formula = ShannonFormula()
 
-    def trans_formula(self, tc: np.ndarray, freq: float = 1) -> np.ndarray:
-        return np.where(tc <= 1., 1., 0)
 
+class HaarFormula(WaveletFormula):
+    def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
+        timeline = np.where(np.abs(timeline) >= 1 / freq, timeline, 0)
+        timeline = np.where(timeline > 0., 1, timeline)
+        timeline = np.where(timeline < 0., -1, timeline)
+        return timeline - np.flip(timeline)
 
 class Haar(WaveletBase):
     '''
@@ -285,9 +301,4 @@ class Haar(WaveletBase):
                                    cache_limit=cache_limit)
         self.mode = CWTMode.Convolve
         self.cuda = cuda
-
-    def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
-        timeline = np.where(np.abs(timeline) >= 1 / freq, timeline, 0)
-        timeline = np.where(timeline > 0., 1, timeline)
-        timeline = np.where(timeline < 0., -1, timeline)
-        return timeline - np.flip(timeline)
+        self.formula = HaarFormula()
