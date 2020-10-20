@@ -34,13 +34,14 @@ Please see Advantages and Limitations.
     + This package is extremely fast for a pure python package.  
     + Cupy makes it extremely fast.  
         * About One or two order faster than other prevalent packages.
+        * Asynchronous calculation by GPU.
     + Even if you can not use cupy, it is very fast.
         * About 3 to 15 times faster than other prevalent packages.
 - Reliability
     + Being brand new project, it has no achivement...
     + There may be lots of bugs.
     + Do not rely on it! Read the source code! Test by your self!
-- In heavily debelopment
+- In heavily development
     + Destructive change may be performed.
 
 # Install
@@ -74,9 +75,8 @@ pip install cupy
 
 # Usage
 - At first, import wavelets and import numpy or cupy.
-- Ninwavelets can use cuda, and so, switch numpy or cupy.
 - The wave must be numpy or cupy data.
-  + If you want to use cuda, prepare cupy data! It does not transform!
+  + If you want to use cuda, prepare cupy data! It does not transform automatically!
 - Make instance of wavelet.
 - Make frequency instance as numpy or cupy.
   + If you did not make it, ninwavelets may becomes slower!
@@ -91,7 +91,10 @@ freqs = cp.array(20, 100, 1)
 wave = cp.sin(cp.arange(0, 1000, 1))
 morse = Morse(1000)
 morse.cwt(wave, freqs)
-# morse.cwt(wave, cp.arange(20, 100, 1))   is slow!
+# morse.cwt(wave, cp.arange(20, 100, 1))   is little bit slow!
+
+# 2 dimension wave can be converted!
+morse.cwt(np.array([wave for n in range(10)], freqs)
 ```
 
 # Purpose and background
@@ -405,13 +408,14 @@ There are these methods.
 - zscore: standize after subtraction
 - zlog: log after zscore
 
-
+## WaveletFormula Class
+Super class of formula, which is a member of wavelet classes.  
 
 ## WaveletBase Class
 Super class of wavelets.  
-You can inherit this class and make new wavelets.  
+You can inherit this class and WaveletFormula class, then make new wavelets.  
 
-After inherit this, you should edit these methods.  
+After inherit WaveletFormula class, you should edit these methods.  
 
 - BaseWavelet.formula
 - BaseWavelet.trans_formula
@@ -422,7 +426,9 @@ After inherit this, you should edit these methods.
 At first, you need to overwrite them.  
 They needs to be written by numpy or cupy code.  
 Cupy version should start with 'cp'.  
-By inheriting, ninwavelet becomes scalable.  
+
+Then, inherit WaveletBase class.  
+Make a member variable of WaveletBase named 'formula'.  
 
 ## Way to inherit
 
@@ -432,82 +438,57 @@ ninwavelets.MorletWavelet.
 
 ```python
 import cupy as cp
-from ninwavelet import WaveletBase
+from ninwavelet import WaveletBase, WaveletFormula
 import matplotlib.pyplot as plt
 
-
-class Morlet(WaveletBase):
-    '''
-    Morlet Wavelets.
-    Example.
-    >>> morlet = Morse(1000, sigma=7.)
-    >>> freq = 60
-    >>> time = np.arange(0, 0.3, 0.001)
-    >>> sin = np.array([np.sin(time * freq * 2 * np.pi)])
-    >>> result = morlet.power(sin, range(1, 100))
-    >>> plt.imshow(result, cmap='RdBu_r')
-    >>> plt.gca().invert_yaxis()
-    >>> plt.title('CWT of 60Hz sin wave')
-    >>> plt.show()
-
-    Parameters
-    ----------
-    sfreq: float | Sampling frequency.
-        This behaves like sfreq of mne-python.
-    sigma: float | sigma value
-    length: float | Length of wavelet.
-        It does not make sence when you use fft only.
-        Too long wavelet causes slow calculation.
-        This param is cutting threshould of wavelets.
-        Peak wave * length is the length of wavelet.
-
-    Returns
-    -------
-    As constructor, Morlet instance its self.
-    '''
-
-    def __init__(self, sfreq: float = 1000, sigma: float = 7.,
-                 real_wave_length: float = 1.,
-                 gabor: bool = False, cuda: bool = False) -> None:
-        super(Morlet, self).__init__(sfreq, real_wave_length, cuda)
-        self.mode = CWTMode.Fast
+class MorletFormula(WaveletFormula):
+    def __init__(self, sigma: float = 7.,
+                 gabor: bool = False) -> None:
         self.sigma = sigma
-        self.c = np.float_power(1 +
-                                np.exp(-np.float_power(self.sigma, 2) / 2)
-                                - 2 * np.exp(-3 / 4
-                                             * np.float_power(self.sigma, 2)),
+        self.c = np.float_power(1
+                                + np.exp(-np.square(self.sigma))
+                                - 2 * np.exp(-3 / 4 * np.square(self.sigma)),
                                 -1/2)
         self.k = 0 if gabor else np.exp(-np.float_power(self.sigma, 2) / 2)
 
     def cp_trans_formula(self, freqs: cp.ndarray,
-                                 freq: float = 1.) -> cp.ndarray:
-        freqs = freqs / freq * self.peak_freq(freq)
+                         freq: float = 1.) -> cp.ndarray:
+        peak_freq = self.sigma / (1. - cp.exp(-self.sigma * freq))
+        freqs = freqs / freq * peak_freq
         result = (self.c * cp.pi ** (-1/4) *
                   (cp.exp(-cp.square(self.sigma-freqs) / 2) -
                    self.k * cp.exp(-cp.square(freqs) / 2)))
         return result
 
-    def trans_formula(self, freqs: np.ndarray,
-                              freq: float = 1) -> np.ndarray:
+    def trans_formula(self, freqs: np.ndarray, freq: float = 1) -> np.ndarray:
         freqs = freqs / freq * self.peak_freq(freq)
-        return (self.c * np.float_power(np.pi, (-1/4)) *
-                (np.exp(-np.square(self.sigma-freqs) / 2) -
-                 self.k * np.exp(-np.square(freqs) / 2)))
+        return (self.c * np.float_power(np.pi, -1/4)
+                * (np.exp(-np.square(self.sigma-freqs) / 2)
+                   - self.k * np.exp(-np.square(freqs) / 2)))
 
-    def formula(self, timeline: np.ndarray,
-                        freq: float = 1) -> np.ndarray:
+    def cp_formula(self, timeline: cp.ndarray, freq: float = 1) -> np.ndarray:
+        return (self.c * (cp.pi ** (-1 / 4))
+                * cp.exp(-cp.square(timeline) / 2)
+                * (cp.exp(self.sigma * 1j * timeline) - self.k))
+
+    def formula(self, timeline: np.ndarray, freq: float = 1) -> np.ndarray:
         return (self.c * np.float_power(np.pi, (-1 / 4))
                 * np.exp(-np.square(timeline) / 2)
                 * (np.exp(self.sigma * 1j * timeline) - self.k))
 
-    def cp_formula(self, timeline: cp.ndarray,
-                        freq: float = 1) -> cp.ndarray:
-        return (self.c * (cp.pi ** (-1 / 4))
-                * cp.exp(-cp.square(timeline) / 2)
-                * (cp.e ** (self.sigma * 1j * timeline) - self.k))
-
     def peak_freq(self, freq: float) -> float:
         return self.sigma / (1. - np.exp(-self.sigma * freq))
+
+
+class Morlet(WaveletBase):
+    def __init__(self, sfreq: float = 1000, sigma: float = 7.,
+                 real_wave_length: float = 1.,
+                 gabor: bool = False, cuda: bool = False,
+                 cache_limit: Optional[int] = 10) -> None:
+        super(Morlet, self).__init__(sfreq, real_wave_length, cuda,
+                                     cache_limit=cache_limit)
+        self.formula = MorletFormula(sigma, gabor)
+        self.mode = CWTMode.Fast
 ```
 
 All you should do is write formula and peak_freq.  
@@ -545,6 +526,7 @@ But when I tested, ninwavelets seemd to be extremely faster totally.
 Did you think ninwavelet based on cuda seems to be extremely fast?  
 **It is not true every time.** Throwing data into GPU takes much time.  
 In some cases, numpy may faster than cupy.  
+For example, if you perform only 10 times, the best way is using numpy.  
 Ninwavelets is simple package now, and so,  
 it may has less functions than other packages.  
 
@@ -589,9 +571,9 @@ But what I have done is just adjusting bottle necks carefully.
 Coding wavelet transform itself is not difficult.  
 There is some way to write fast code...
 
-- Skip calculation as much as possible.
-- Skip tranfering data between main memory and GPU.
-- Skip processing by pure python and write in cupy or numpy as much as possible.
+- Skipping calculation as much as possible.
+- If possible, skipping tranfering data between main memory and GPU.
+- Skipping processing by pure python and write in cupy or numpy as much as possible.
 - Use fft.
 
 ## There are some anti-patterns
@@ -634,7 +616,8 @@ I adopted method 3 as Fast mode. Not only GMW, but also Morlet wavelet transform
 
 ## It is just my hobby
 This project is just my hobby, and I am not an engineer or scholar, just a nurd.  
-If you cannot believe a nurd without licence of PHD or python engineer, just ignore it.  
+If you cannot believe a nurd without licence of PHD or python engineer,  
+just ignore it and enjoy slow life.  
 
 # Contribution
 I am glad to receive contribution.  
@@ -666,7 +649,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         * It will not be written. It must be a user's work.
         * "Make each program do one thing well."
     + [ ] DWT
+        * But, if you want to perform DWT, using np.exp2 may works well.
     + [ ] 2D wavelet
+        * [x] FastMode
+        * [x] Convolve
 - [x] Refactor
     + [x] Do not use fft derived from multiple packages.
 - [x] Use cuda or cython and speedup!

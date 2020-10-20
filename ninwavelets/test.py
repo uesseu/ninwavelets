@@ -11,7 +11,7 @@ from ninwavelets import (Morse, Morlet, CWTMode, np2cp,
 from mne.io import Raw
 from mne import verbose
 import gc
-from time import time
+from time import time, sleep
 from sys import argv
 from logging import getLogger, INFO, WARNING, basicConfig, ERROR, CRITICAL
 from functools import partial
@@ -258,14 +258,26 @@ def eeg(cuda: bool) -> None:
     ax.set_ylabel('Hz')
     plt.show()
 
+def speed_wavelet_test() -> None:
+    freq_range = 30, 500
+    freqs = np.arange(freq_range[0], freq_range[1], 1)
+    t = time()
+    for n in range(10):
+        mne_morlet = morlet(1000, freqs)
+    print('MNE wavelet generation: ', time() - t)
+
+    t = time()
+    for n in range(10):
+        nin_morlet = Morlet(1000,gabor=True).make_fft_wavelets(freqs)
+    print('Nin wavelet generation: ', time() - t)
 
 def speed_test(i: int) -> None:
     length = 1
-    repeat = 10
-    freq_range = 30, 50
+    repeat = 100
+    freq_range = 30, 500
     t = time()
-    sin = make_example(length, False)
-    c_sin = make_example(length, True)
+    sin = make_example(length, False, False)
+    c_sin = make_example(length, True, False)
     wv = make_example(length, False)
     wv_mne = np.array([make_example(length, False)])
     freqs = np.arange(freq_range[0], freq_range[1], 1)
@@ -292,25 +304,16 @@ def speed_test(i: int) -> None:
     print(f'MNE morlet {mne_time}')
 
     #====================
-    # PyWavelet
-    #====================
-    import pywt
-    t = time()
-    for n in range(int(repeat/10)):
-        cwtmatr, result_freqs = pywt.cwt(wv, freqs, 'cmor1.5-1.0')
-        np.abs(cwtmatr) ** 2
-    pywavelet_time = (time() - t) * 10
-    print(f'PyWavelet morlet {pywavelet_time}')
-
-    #====================
     # NinWavelet
     #====================
-    sp_c_sin = cp.array([c_sin for n in range(repeat)])
+    sp_c_sin = np.array([sin for n in range(repeat)])
     nin_morlet = Morlet(cuda=True, sfreq=1000)
     t = time()
-    # for n in range(repeat):
-    #     result_morlet_cuda = nin_morlet.power(c_sin, freqs)
-    result_morlet = nin_morlet.power(sp_c_sin, freqs)
+    result_morlet_cuda = nin_morlet.power(cp.asarray(sp_c_sin), freqs)
+    nin_morlet_tmp = Morlet(cuda=False, sfreq=1000)
+    for n in range(int(repeat / 10)):
+        result_morlet = nin_morlet_tmp.power(sin, freqs)
+    print(result_morlet_cuda[-1, -1, -1])
     ninwavelet_time_cuda = time() - t
     print(f'Ninwavelets cuda morlet {ninwavelet_time_cuda}')
 
@@ -322,9 +325,11 @@ def speed_test(i: int) -> None:
     print(f'Ninwavelets slow morlet {ninwavelet_time_slow}')
 
     nin_morlet = Morlet(cuda=False, sfreq=1000)
+    sp_sin = np.array([sin for n in range(repeat)])
     t = time()
     for n in range(repeat):
-        result_morlet_cuda = nin_morlet.power(sin, freqs)
+        result_morlet = nin_morlet.power(sin, freqs)
+    # result_morlet = nin_morlet.power(sp_sin, freqs)
     ninwavelet_time = time() - t
     print(f'Ninwavelets numpy morlet {ninwavelet_time}')
     #====================
@@ -338,19 +343,12 @@ def speed_test(i: int) -> None:
     swan_time = time() - t
     print(f'Swan morlet {swan_time}')
 
-    plt.bar(np.arange(0, 7, 1),
-            1 / np.array([pywavelet_time, scipy_time, mne_time, swan_time, ninwavelet_time_slow, ninwavelet_time, ninwavelet_time_cuda]),
-            tick_label=['PyWavelet', 'Scipy', 'MNE', 'Swan', 'Ninwavelets\nSlow', 'Ninwavelets', 'Ninwavelets\nCuda'])
+    plt.bar(np.arange(0, 6, 1),
+            1 / np.array([scipy_time, mne_time, swan_time, ninwavelet_time_slow, ninwavelet_time, ninwavelet_time_cuda]),
+            tick_label=['Scipy', 'MNE', 'Swan', 'Ninwavelets\nNaive', 'Ninwavelets\nCached', 'Ninwavelets\nCuda'])
     plt.xlabel('Packages')
     plt.ylabel(f'Speed. ({repeat}trial / sec) Bigger is fast.')
     plt.title(f'1sec wave, Sampling frequency:1000Hz\nMorletWavelet({freq_range[0]}~{freq_range[1]}Hz) {repeat}times')
-    plt.show()
-
-    plt.bar(np.arange(0, 2, 1),
-            1 / np.array([scipy_time, ninwavelet_time_cuda]),
-            tick_label=['Scipy', 'My package'])
-    plt.xlabel('Packages')
-    plt.ylabel(f'Speed. ({repeat}trial / sec) Bigger is fast.')
     plt.show()
 
 def geom_test() -> None:
@@ -411,13 +409,14 @@ if __name__ == '__main__':
         cwt_test(False, show=True)
         other_wavelet_test()
     if 'async' in argv:
-        data = [np.asarray(np.arange(1, 1000, 1)) for i in range(100)]
+        data = [np.asarray(np.arange(1, 1000, 1)) for i in range(10)]
         t = time()
-        tuple(cp.asarray(n) for n in data)
+        res = tuple(cp.asarray(n) for n in data)
+        print(res[0][0])
         print(f'Sync {time() - t}')
-
         t = time()
-        np2cp(data, sep=1)
+        res = np2cp(data, sep=1)
+        print(res[0][0])
         print(f'Async {time() - t}')
     if 'geom' in argv:
         geom_test()
@@ -430,3 +429,5 @@ if __name__ == '__main__':
         # tune(wave)
         tune_cuda(cp_wave, 500)
         tune_2d(sp_cp_wave)
+    if 'wavelet_speed' in argv:
+        speed_wavelet_test()

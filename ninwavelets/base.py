@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from multiprocessing import Pool
 from typing import Union, List, Iterator, Callable, Tuple, cast, Optional, Dict
 from enum import Enum
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -44,10 +45,10 @@ def np2cp(npdata: np.ndarray, sep: int = 1) -> cp.ndarray:
     >>> first = np.arange(1, 1000, 1)
     >>> second = np.arange(1, 1000, 1)
     >>> set_of_data = [first, second]
-    >>> cp_first, cp_second = np2cp(*set_of_data)
+    >>> cp_first, cp_second = np2cp(set_of_data)
     '''
     copy_npdata = (cp_alloc(npd) for npd in npdata)
-    cupy_mem = (cp.ndarray(npd.shape, npd.dtype) for npd in npdata)
+    cupy_mem = tuple(cp.ndarray(npd.shape, npd.dtype) for npd in npdata)
     streams = tuple(cp.cuda.Stream(non_blocking=True) for n in range(sep))
     tuple(cmem.set(cnpd, streams[n % sep])
           for cmem, cnpd, n
@@ -414,7 +415,8 @@ class WaveletGenerator:
             result = self.formula.get_trans_formula(self.cuda)(t, many_freqs)
             # Adjust norm
             divs = self._get_wavelet_norm(ncp.fft.ifft(result), (1,))
-            result /= ncp.tile(divs, (result.shape[1], 1)).T
+            tiled_div = ncp.tile(divs, (result.shape[1], 1)).T
+            result = result / tiled_div
             self.fft_wavelets = result
             return result
         else:
@@ -500,14 +502,16 @@ class WaveletGenerator:
             wavelet = ncp.hstack(
                 (ncp.conj(ncp.flip(wavelet, 0)), wavelet))[start: stop]
             norms = ncp.array(self._get_wavelet_norm(wavelet, (1,)))
-            wavelet /= ncp.tile(norms, (wavelet.shape[1], 1)).T
+            tiled_norm = ncp.tile(norms, (wavelet.shape[1], 1)).T
+            wavelet = wavelet / tiled_norm
         else:
             timeline = ncp.array(
                 [self._setup_waveletshape(freq, 1, zero_mean=True)
                  for freq in freqs])
             wavelet = self.formula.get_formula(self.cuda)(timeline, freqs)
             divs = ncp.array(self._get_wavelet_norm(wavelet, (1,)))
-            wavelet /= ncp.tile(divs, (wavelet.shape[1], 1)).T
+            tiled_div = ncp.tile(divs, (wavelet.shape[1], 1)).T
+            wavelet = wavelet / tiled_div
         self.wavelets = wavelet
         return wavelet
 
@@ -584,6 +588,8 @@ class WaveletConvolver(WaveletsContainer):
                   for wavelet in cast(Array, self.wavelets)]
                  for w in wave]
                 )
+        return ncp.array([ncp.convolve(w, wave, 'same')
+                          for w in cast(Array, self.wavelets)])
 
 class WaveletMultiplier(WaveletsContainer):
     """
@@ -632,12 +638,12 @@ class WaveletMultiplier(WaveletsContainer):
         ncp = cp if self.cuda else np
         # logger.info('Applying FFT mul.')
         # This 7 lines makes this fast a little.
-        if self.cuda:
-            if dimension == 2:
-                return ncp.fft.ifft(
-                    self.fft_wavelets *
-                    ncp.fft.fft(wave).reshape(wave.shape[0],
-                                              1, wave.shape[-1]))
+        if dimension == 2:
+            return ncp.fft.ifft(
+                self.fft_wavelets *
+                ncp.fft.fft(wave).reshape(
+                    wave.shape[0], 1, wave.shape[-1]))
+        if self.cuda and dimension == 1:
             if remake_plan:
                 self._fft_plan = cx_fft.get_fft_plan(wave, axes=(0,))
             to_ifft = self.fft_wavelets * cx_fft.fft(wave, plan=self._fft_plan)

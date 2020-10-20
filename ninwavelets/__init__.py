@@ -1,2 +1,2 @@
-from .base import WaveletBase, CWTMode, plot_tf, Baseline, np2cp
+from .base import WaveletBase, CWTMode, plot_tf, Baseline, np2cp, WaveletFormula
 from .wavelets import Morse, Morlet, Haar, MexicanHat, Shannon
