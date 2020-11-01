@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from multiprocessing import Pool
-from typing import Union, List, Iterator, Callable, Tuple, cast, Optional, Dict
+from typing import Union, List, Iterator, Callable, Tuple, cast, Optional, Dict, Any
 from enum import Enum
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from functools import partial, reduce
@@ -24,16 +24,16 @@ Numbers = Union[List[float], np.ndarray, range]
 Array = Union[np.ndarray, cp.ndarray]
 Float = Optional[float]
 Floats = Optional[Tuple[float, float]]
-NORM_CONSTANT = np.sqrt(0.5)
+NORM_CONSTANT: float = np.sqrt(0.5)
 
 
 
 def cp_alloc(array: np.ndarray) -> np.ndarray:
-  buf = np.frombuffer(cp.cuda.alloc_pinned_memory(array.nbytes),
-                      array.dtype,
-                      array.size).reshape(array.shape)
-  buf[...] = array
-  return buf
+    buf: np.ndarray = np.frombuffer(cp.cuda.alloc_pinned_memory(array.nbytes),
+                                    array.dtype,
+                                    array.size).reshape(array.shape)
+    buf[...] = array
+    return buf
 
 
 def np2cp(npdata: np.ndarray, sep: int = 1) -> cp.ndarray:
@@ -160,24 +160,24 @@ class CWTMode(Enum):
     # Even if FFTed formula is there, use IFFTed Wavelet, and FFT.
     # This is ugly and not accurate. Just for test code.
     '''
-    Normal = 0
+    Normal: int = 0
     # Use Wavelet formula only
     # From wavelet formula, make FFTed formula, then convolve.
     # It seems to be normal, but not best way if there is an
     # FFTed formula.
 
     # ifft(Convolve(fft(wavelet) @ fft(wave)))
-    Fast = 1
+    Fast: int = 1
     # Use FFTed formula only.
     # It may be best, if there is FFTed formula.
 
     # ifft(Convolve(ffted_wavelet @ fft(wave)))
-    Convolve = 2
+    Convolve: int = 2
     # From FFTed formula, compute the raw wavelet.
     # Then convolve. Slow.
 
     # Convolve(wavelet @ wave)
-    Reverse = 3
+    Reverse: int = 3
     # Even if FFTed formula is there, use IFFTed Wavelet, and FFT.
     # This is ugly and not accurate. Just for test code.
 
@@ -487,17 +487,21 @@ class WaveletGenerator:
         '''
         logger.info('Making wavelet.')
         ncp = cp if self.cuda else np
+        wavelet: Array
+        norms: Array
+        tiled_norms: Array
+        divs: Array
         if freqs[0] == 0:
             raise ZeroDivisionError
         if self.mode in [CWTMode.Reverse, CWTMode.Fast]:
-            timelines = ncp.array(tuple(self._setup_trans_shape(
+            timelines: Array = ncp.array(tuple(self._setup_trans_shape(
                 freq, self.wave_length)
                               for freq in freqs))
             if self.cuda:
                 wavelet = cp.fft.ifft(self.formula.cp_trans_formula(timelines))
             else:
                 wavelet = np.fft.ifft(self.formula.trans_formula(timelines))
-            half = int(wavelet.shape[0])
+            half: int = int(wavelet.shape[0])
             start, stop = half // 2, half // 2 * 3
             wavelet = ncp.hstack(
                 (ncp.conj(ncp.flip(wavelet, 0)), wavelet))[start: stop]
@@ -538,7 +542,7 @@ class WaveletsContainer(WaveletGenerator):
         self._kept: Dict[str, Dict[str, Array]] = {'fft': {}, 'wavelet': {}}
 
     def _get_kept_wavelets(self, wave: Array, freqs: Array) -> None:
-        sid = ''.join((str(wave.shape), str(id(freqs))))
+        sid: str = ''.join((str(wave.shape), str(id(freqs))))
         if sid in self._kept['wavelet'].keys():
             self.wavelets = self._kept['wavelet'][sid]
         else:
@@ -618,8 +622,8 @@ class WaveletMultiplier(WaveletsContainer):
         -------
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
-        dimension = len(wave.shape)
-        wave_shape = wave.shape
+        dimension: int = len(wave.shape)
+        wave_shape: tuple = wave.shape
         remake_plan = False
         if self.cuda:
             wave = wave.astype(cp.complex)
@@ -658,7 +662,7 @@ class WaveletMultiplier(WaveletsContainer):
         """
         CWT for wave which is already fourier transformed.
         """
-        remake_plan = False
+        remake_plan: bool = False
         self.wave_length = wave.shape[0]
         if self.cuda:
             wave = wave.astype(cp.complex)
@@ -706,7 +710,7 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
         -------
         Result of CWT: Union[np.ndarray, cp.ndarray]
         '''
-        reuse_wavelets = False
+        reuse_wavelets: bool = False
         if (self.freqs is freqs) and (self.wave_length == wave.shape[-1]):
             reuse_wavelets = True
         self.freqs = freqs
