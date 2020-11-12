@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from scipy.fftpack import fft, ifft
 from mne.time_frequency.tfr import morlet, cwt
 from ninwavelets import (Morse, Morlet, CWTMode, np2cp,
-                         Haar, plot_tf, MexicanHat, Shannon, Baseline)
+                         Haar, plot_tf, MexicanHat, Shannon, Baseline,
+                         windows, experimental)
 from mne.io import Raw
 from mne import verbose
 import gc
@@ -61,10 +62,10 @@ def test3d() -> None:
     go = morlet(sfreq, [hz])[0]
     mm = morlet(sfreq, [hz], zero_mean=True)[0]
     morse_obj = Morse(sfreq, 17.5, 3)
-    morse = morse_obj.make_wavelet(hz)
+    morse = morse_obj.make_wavelets([hz])[0]
     nm = Morlet(sfreq)
     nm.mode = CWTMode.Normal
-    nin_morlet = nm.make_wavelet(hz)
+    nin_morlet = nm.make_wavelets([hz])[0]
 
     half_morse = morse.shape[0] / 2
     morse_time = np.arange(-half_morse, half_morse, 1)
@@ -82,7 +83,7 @@ def test3d() -> None:
     ax.plot(morlet_time, mm, label='MNE Morlet')
     ax.plot(morlet_time, mm.imag, label='MNE Morlet imag')
     ax.plot(morlet_time, go, label='Gabor Wavelet')
-    ax.plot(Haar(1000).make_wavelet(hz), label='Haar Wavelet')
+    ax.plot(Haar(1000).make_wavelets([hz])[0], label='Haar Wavelet')
 
     ax1 = fig.add_subplot(212, projection='3d')
     ax1.scatter3D(morse.real, morse_time, morse.imag, label='morse')
@@ -187,9 +188,9 @@ Because cupy 7.6.0 has no method named convolve''')
 def other_wavelet_test() -> None:
     hz = 10
     s = 7
-    mexcan = MexicanHat().make_wavelet(hz)
-    shannon = Shannon().make_wavelet(hz)
-    morlet = Morlet(sigma=s).make_wavelet(hz)
+    mexcan = MexicanHat().make_wavelets([hz])
+    shannon = Shannon().make_wavelets([hz])
+    morlet = Morlet(sigma=s).make_wavelets([hz])
     plt.plot(mexcan)
     plt.plot(shannon)
     plt.plot(morlet)
@@ -219,12 +220,12 @@ def fft_wavelet_test() -> None:
     nin_morlet = Morlet(sigma=s, sfreq=1000)
     normal_morlet = Morlet(sigma=s, sfreq=1000)
     normal_morlet.mode = CWTMode.Normal
-    fig = plt.figure()
-    w = morse.make_wavelet(hz)
-    a = morse.make_fft_wavelet(hz)
-    b = nin_morlet.make_wavelet(hz)
-    c = nin_morlet.make_fft_wavelet(hz)
+    w = morse.make_wavelets([hz])
+    a = morse.make_fft_wavelets([hz])[0]
+    b = nin_morlet.make_wavelets([hz])[0]
+    c = nin_morlet.make_fft_wavelets([hz])[0]
     d = morlet(1000, [hz])[0]
+    fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
     ax.plot(w, label='Generalized Morse wavelet')
     ax.plot(a, label='FFTed Generalized Morse wavelet')
@@ -233,7 +234,7 @@ def fft_wavelet_test() -> None:
     ax.plot(np.abs(c.real), label='FFTed Morlet wavelet')
     ax.plot(np.abs(fft(d)), label='MNE morlet')
     ax.plot(c.imag, label='imag of FFTed Morlet wavelet')
-    ax.plot(normal_morlet.make_wavelet(hz), label='Morlet Wavelet Normal Mode')
+    ax.plot(normal_morlet.make_wavelets([hz]), label='Morlet Wavelet Normal Mode')
     handler, label = ax.get_legend_handles_labels()
     ax.legend(label, loc='upper right')
     plt.show()
@@ -391,7 +392,7 @@ if __name__ == '__main__':
     if 'wave' in argv:
         test3d()
         fft_wavelet_test()
-        other_wavelet_test()
+        # other_wavelet_test()
     if '2d' in argv:
         test_2d()
     if 'cwt' in argv:
@@ -431,3 +432,26 @@ if __name__ == '__main__':
         tune_2d(sp_cp_wave)
     if 'wavelet_speed' in argv:
         speed_wavelet_test()
+    if 'window' in argv:
+        wave = np.ones(1000)
+        plt.plot(windows.hanning_window(1000, cuda=False, tukey_ratio=0.1) * wave)
+        plt.plot(np.abs(ifft(wave)))
+        plt.show()
+    if 'app' in argv:
+        sin = make_example(1, False, False)
+        sin10 = np.tile(sin, 100).reshape((100,sin.shape[-1]))
+        morse = Morse()
+        freqs = np.arange(30, 150)
+        res=morse.cwt(sin, freqs)
+        t = time()
+        for n in range(100):
+            res=morse.fourier_cwt(fft(sin), freqs)
+        print(time() - t)
+        plt.imshow(np.abs(res))
+        plt.show()
+        morse1 = experimental.Morse()
+        t = time()
+        res = morse1.app_cwt(sin10, freqs, band_rate=0.1)
+        print(time() - t)
+        plt.imshow(np.abs(res[50]))
+        plt.show()

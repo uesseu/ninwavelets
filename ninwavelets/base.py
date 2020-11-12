@@ -19,6 +19,7 @@ try:
 except ImportError as error:
     print(error)
     print('Cupy could not be loaded.')
+    cp = np
 
 Numbers = Union[List[float], np.ndarray, range]
 Array = Union[np.ndarray, cp.ndarray]
@@ -405,6 +406,8 @@ class WaveletGenerator:
         ncp = cp if self.cuda else np
         if freqs[0] == 0:
             raise ZeroDivisionError
+        if isinstance(freqs, list):
+            freqs = np.array(freqs)
         if self.mode in [CWTMode.Fast]:
             # Make timeline
             t = ncp.tile(
@@ -463,7 +466,7 @@ class WaveletGenerator:
             half = int(wavelet.shape[0])
             start, stop = half // 2, half // 2 * 3
             wavelet = ncp.hstack((ncp.conj(ncp.flip(wavelet, 0)),
-                                        wavelet))[start: stop]
+                                  wavelet))[start: stop]
             wavelet /= self._get_wavelet_norm(wavelet)
         else:
             timeline = self._setup_waveletshape(freq, 1, zero_mean=True)
@@ -493,6 +496,8 @@ class WaveletGenerator:
         divs: Array
         if freqs[0] == 0:
             raise ZeroDivisionError
+        if isinstance(freqs, list):
+            freqs = np.array(freqs)
         if self.mode in [CWTMode.Reverse, CWTMode.Fast]:
             timelines: Array = ncp.array(tuple(self._setup_trans_shape(
                 freq, self.wave_length)
@@ -501,10 +506,10 @@ class WaveletGenerator:
                 wavelet = cp.fft.ifft(self.formula.cp_trans_formula(timelines))
             else:
                 wavelet = np.fft.ifft(self.formula.trans_formula(timelines))
-            half: int = int(wavelet.shape[0])
+            half: int = int(wavelet.shape[-1])
             start, stop = half // 2, half // 2 * 3
             wavelet = ncp.hstack(
-                (ncp.conj(ncp.flip(wavelet, 0)), wavelet))[start: stop]
+                (ncp.conj(ncp.flip(wavelet, -1)), wavelet))[..., start: stop]
             norms = ncp.array(self._get_wavelet_norm(wavelet, (1,)))
             tiled_norm = ncp.tile(norms, (wavelet.shape[1], 1)).T
             wavelet = wavelet / tiled_norm
