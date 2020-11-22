@@ -293,7 +293,7 @@ class WaveletGenerator:
     It is used as base class of 'WaveletBase'.
     """
     def __init__(self, sfreq: float = 1000, real_wave_length: float = 1.,
-                 cuda: bool = False) -> None:
+                 cuda: bool = False, check: bool = False) -> None:
         '''
         Parameters
         ----------
@@ -314,6 +314,7 @@ class WaveletGenerator:
         self.fft_wavelets: Optional[Array] = None
         self.wavelets: Optional[Array] = None
         self.formula: WaveletFormula
+        self.check = bool
 
     def _setup_trans_shape(self, freq: float, wave_length: int) -> Array:
         '''
@@ -406,7 +407,7 @@ class WaveletGenerator:
         ncp = cp if self.cuda else np
         if freqs[0] == 0:
             raise ZeroDivisionError
-        if isinstance(freqs, list):
+        if self.check and isinstance(freqs, list):
             freqs = np.array(freqs)
         if self.mode in [CWTMode.Fast]:
             # Make timeline
@@ -496,7 +497,7 @@ class WaveletGenerator:
         divs: Array
         if freqs[0] == 0:
             raise ZeroDivisionError
-        if isinstance(freqs, list):
+        if self.check and isinstance(freqs, list):
             freqs = np.array(freqs)
         if self.mode in [CWTMode.Reverse, CWTMode.Fast]:
             timelines: Array = ncp.array(tuple(self._setup_trans_shape(
@@ -641,8 +642,8 @@ class WaveletMultiplier(WaveletsContainer):
                 self.fft_wavelets = self._kept['fft'][sid]
             else:
                 self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
-                if((not self.cache_limit) or
-                   self.cache_limit > len(self._kept['fft'])):
+                if((self.cache_limit is None) or
+                   0 < self.cache_limit < len(self._kept['fft'])):
                     self._kept['fft'].update({sid: self.fft_wavelets})
         ncp = cp if self.cuda else np
         # logger.info('Applying FFT mul.')
@@ -721,7 +722,7 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
         self.freqs = freqs
         self.wave_length = wave.shape[-1]
         if self.mode in [CWTMode.Fast, CWTMode.Normal]:
-            if isinstance(wave, cp.ndarray):
+            if self.check and isinstance(wave, cp.ndarray):
                 logger.info('Cuda is enabled.')
                 self.cuda = True
             return self._cwt_fft(wave, freqs, reuse_wavelets, logger)
@@ -730,7 +731,7 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
 Cuda is disabled, because cupy cannot convolve in this version.
 Numpy will be used.''')
             self.cuda = False
-        if isinstance(wave, cp.ndarray):
+        if self.check and isinstance(wave, cp.ndarray):
             logger.error('''
 Cuda is disabled, but the wave is cupy.ndarray.
 In this version, in Convolve mode, cuda is disabled.

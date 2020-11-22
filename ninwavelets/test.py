@@ -4,6 +4,12 @@ from mpl_toolkits.mplot3d import Axes3D
 from typing import Any, Union
 from multiprocessing import Pool
 import matplotlib.pyplot as plt
+import matplotlib
+
+font_path = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
+font_prop = matplotlib.font_manager.FontProperties(fname=font_path, size=18)
+matplotlib.rcParams['font.family'] = font_prop.get_name()
+plt.rcParams["font.family"] = "IPAexGothic"
 from scipy.fftpack import fft, ifft
 from mne.time_frequency.tfr import morlet, cwt
 from ninwavelets import (Morse, Morlet, CWTMode, np2cp,
@@ -307,16 +313,32 @@ def speed_test(i: int) -> None:
     #====================
     # NinWavelet
     #====================
-    sp_c_sin = np.array([sin for n in range(repeat)])
+    sp_c_sin = cp.array([sin for n in range(repeat)])
     nin_morlet = Morlet(cuda=True, sfreq=1000)
+    c_sin = cp.array(sin)
+
     t = time()
-    result_morlet_cuda = nin_morlet.power(cp.asarray(sp_c_sin), freqs)
-    nin_morlet_tmp = Morlet(cuda=False, sfreq=1000)
-    for n in range(int(repeat / 10)):
-        result_morlet = nin_morlet_tmp.power(sin, freqs)
+    result_morlet_cuda = nin_morlet.power(sp_c_sin, freqs)
+    print(result_morlet_cuda[-1, -1, -1])
+    ninwavelet_time_2d_cuda = time() - t
+    print(f'Ninwavelets cuda 2d morlet {ninwavelet_time_2d_cuda}')
+
+    t = time()
+    nin_morlet_tmp = Morlet(cuda=True, sfreq=1000, cache_limit=1)
+    for n in range(repeat):
+        result_morlet = nin_morlet_tmp.power(c_sin, freqs)
     print(result_morlet_cuda[-1, -1, -1])
     ninwavelet_time_cuda = time() - t
     print(f'Ninwavelets cuda morlet {ninwavelet_time_cuda}')
+
+    nin_morlet_tmp = Morlet(cuda=True, sfreq=1000, cache_limit=0)
+    t = time()
+    for n in range(repeat):
+        result_morlet = nin_morlet_tmp.power(c_sin, np.arange(freq_range[0], freq_range[1], 1))
+    print(result_morlet_cuda[-1, -1, -1])
+    ninwavelet_time_cuda_slow = time() - t
+    print(f'Ninwavelets cuda slow morlet {ninwavelet_time_cuda_slow}')
+
 
     nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=0)
     t = time()
@@ -344,10 +366,15 @@ def speed_test(i: int) -> None:
     swan_time = time() - t
     print(f'Swan morlet {swan_time}')
 
-    plt.bar(np.arange(0, 6, 1),
-            1 / np.array([scipy_time, mne_time, swan_time, ninwavelet_time_slow, ninwavelet_time, ninwavelet_time_cuda]),
-            tick_label=['Scipy', 'MNE', 'Swan', 'Ninwavelets\nNaive', 'Ninwavelets\nCached', 'Ninwavelets\nCuda'])
-    plt.xlabel('Packages')
+    bars = np.arange(0, 8, 1)
+    plt.bar(bars,
+            1 / np.array([scipy_time, mne_time, swan_time, ninwavelet_time_slow, ninwavelet_time, 
+                          ninwavelet_time_cuda_slow, ninwavelet_time_cuda,ninwavelet_time_2d_cuda]))
+    plt.xticks(bars, [u'Scipy', u'MNE', u'Swan', u'忍者之漣\nNo optimization', u'忍者之漣\nCPU Cached',
+               u'忍者之漣\nGPU', u'忍者之漣\nGPU\nCached', u'忍者之漣\nGPU\nCUPY 2D mode'],
+            fontproperties=font_prop)
+
+    # plt.xlabel('Packages')
     plt.ylabel(f'Speed. ({repeat}trial / sec) Bigger is fast.')
     plt.title(f'1sec wave, Sampling frequency:1000Hz\nMorletWavelet({freq_range[0]}~{freq_range[1]}Hz) {repeat}times')
     plt.show()
