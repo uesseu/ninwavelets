@@ -410,17 +410,23 @@ class WaveletGenerator:
         if self.check and isinstance(freqs, list):
             freqs = np.array(freqs)
         if self.mode in [CWTMode.Fast]:
-            # Make timeline
-            t = ncp.tile(
-                self._setup_trans_shape(real_length, self.wave_length),
-                (freqs.shape[0], 1))
-            # Make fft wavelets
-            many_freqs = ncp.tile(freqs, (t.shape[1], 1)).T
+            if False:
+                # Make timeline
+                t = ncp.tile(
+                    self._setup_trans_shape(real_length, self.wave_length),
+                    (freqs.shape[0], 1))
+                # Make fft wavelets
+                many_freqs = ncp.tile(freqs, (t.shape[1], 1)).T
+            else:
+                t, many_freqs = ncp.meshgrid(
+                    self._setup_trans_shape(real_length, self.wave_length),
+                                            cp.asarray(freqs))
             result = self.formula.get_trans_formula(self.cuda)(t, many_freqs)
             # Adjust norm
-            divs = self._get_wavelet_norm(ncp.fft.ifft(result), (1,))
+            divs = self._get_wavelet_norm(result, (1,))
             tiled_div = ncp.tile(divs, (result.shape[1], 1)).T
-            result = result / tiled_div
+            result = result / tiled_div * np.sqrt(self.wave_length)
+            # result = result / divs
             self.fft_wavelets = result
             return result
         else:
@@ -441,8 +447,7 @@ class WaveletGenerator:
             Wavelet
         '''
         norm = cp.linalg.norm if self.cuda else np.linalg.norm
-        result =  NORM_CONSTANT * norm(wavelet, axis=axis)
-        return result
+        return NORM_CONSTANT * norm(wavelet, axis=axis)
 
 
     def _make_wavelet(self, freq: float) -> Array:
@@ -503,10 +508,12 @@ class WaveletGenerator:
             timelines: Array = ncp.array(tuple(self._setup_trans_shape(
                 freq, self.wave_length)
                               for freq in freqs))
-            if self.cuda:
-                wavelet = cp.fft.ifft(self.formula.cp_trans_formula(timelines))
-            else:
-                wavelet = np.fft.ifft(self.formula.trans_formula(timelines))
+            wavelet = ncp.fft.ifft(self.formula.get_trans_formula(
+                self.cuda)(timelines))
+            # if self.cuda:
+            #     wavelet = cp.fft.ifft(self.formula.cp_trans_formula(timelines))
+            # else:
+            #     wavelet = np.fft.ifft(self.formula.trans_formula(timelines))
             half: int = int(wavelet.shape[-1])
             start, stop = half // 2, half // 2 * 3
             wavelet = ncp.hstack(
@@ -836,25 +843,40 @@ def plot_tf(data: Array, sfreq: float = 1000,
             vmin: Optional[float] = None, vmax: Optional[float] = None,
             ylabels: Optional[Array] = None,
             cmap: str = 'RdBu_r', show: bool = True,
+            ax: Optional[plt.Axes] = None, size:str = '2%', pad:float = 0.05,
+            aspect: str = 'auto',
             logger: Logger = logger) -> plt.Axes:
     '''
     Plot by matplotlib.
-    vrange: Tuple[float, float]
-        This is range of color.
-        Same as tuple of vmin and vmax of matplotlib.
+
+    vmin: Optional[float]
+    vmax: Optional[float]
+        Scale of result.
+    cmap: str
+        Same as cmap of matplotlib
+    ylabels: Optional[numpy.ndarray]
+        Labels of y axis.
+    ax: Optional[matplotlib.pyplot.Axes]
+        Axes object ot use.
+        Default is None, and makes ax.
+        If you want to use your own figure object, it may be useful.
+    show: bool
+        Whether show or not.
+    ----------
+    Returns
     '''
     logger.info('Plotting time-frequency map')
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    if ylabels:
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+    if ylabels is not None:
         ax.set_yticks(np.arange(0, data.shape[0],
                                 data.shape[0] / ylabels.shape))
         ax.set_yticklabels(ylabels)
     image = ax.imshow(data, vmin=vmin, vmax=vmax, cmap=cmap)
     ax.invert_yaxis()
-    ax.set_aspect('auto')
-    divider = make_axes_locatable(ax)
-    ax_cb = divider.new_horizontal(size="2%", pad=0.05)
+    ax.set_aspect(aspect)
+    ax_cb = make_axes_locatable(ax).new_horizontal(size=size, pad=pad)
     fig.add_axes(ax_cb)
     plt.colorbar(image, cax=ax_cb)
     if show:
