@@ -12,29 +12,24 @@ class MorseFormula(WaveletFormula):
     def __init__(self, r: float, b: float) -> None:
         self.r: float = r
         self.b: float = b
+        self.alpha = 2 * np.power((np.e * self.r / self.b), self.b / self.r)
+        self.peak = np.power(self.b/self.r,1/self.r)
 
     def cp_trans_formula(self, freqs: cp.ndarray,
                          freq: float = 1.) -> cp.ndarray:
-        np_freqs = cp.asnumpy(freqs)
-        step = cp.asarray(np.heaviside(np_freqs, np_freqs))
-        freqs = freqs / freq
-        wave = 2. * (step * cp.power(freqs, self.b) *
-                     cp.exp((self.b / self.r) *
-                            (1.
-                             - cp.power(freqs, self.r))
-                            ))
-        return wave
+        # Indeed, step function is needed.
+        # But, ninwavelet uses only positive side of frequencies.
+        # Using negative side makes it slow.
+        freqs /= freq
+        freqs *= self.peak
+        return self.alpha*cp.power(freqs, self.b)*cp.exp(-cp.power(freqs, self.r))
 
     def trans_formula(self, freqs: np.ndarray, freq: float = 1.) -> np.ndarray:
-        '''
-        Make Fourier transformed morse wavelet.
-        '''
-        freqs = freqs / freq
-        step = np.heaviside(freqs, freqs)
-        wave = 2. * (step * np.float_power(freqs, self.b)
-                     * np.exp((self.b / self.r)
-                              * (1. - np.float_power(freqs, self.r))))
-        return wave
+        # Indeed, step function is needed.
+        # But, ninwavelet uses only positive side of frequencies.
+        # Using negative side makes it slow.
+        freqs = freqs / freq * self.peak
+        return self.alpha*np.power(freqs, self.b)*np.exp(-np.power(freqs, self.r))
 
 class Morse(WaveletBase):
     '''
@@ -100,8 +95,9 @@ class MorletFormula(WaveletFormula):
     def cp_trans_formula(self, freqs: cp.ndarray,
                          freq: float = 1.) -> cp.ndarray:
         peak_freq = self.sigma / (1. - cp.exp(-self.sigma * freq))
-        freqs = freqs / freq * peak_freq
-        result = (self.c * cp.pi ** (-1/4) *
+        freqs /= freq
+        freqs *= peak_freq
+        result = (self.c * cp.power(cp.pi, (-1/4)) *
                   (cp.exp(-cp.square(self.sigma-freqs) / 2) -
                    self.k * cp.exp(-cp.square(freqs) / 2)))
         return result

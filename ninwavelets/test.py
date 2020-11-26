@@ -127,19 +127,18 @@ def cwt_test(cuda: bool = False, show: bool = False, random: bool = False) -> No
     log.info('''Fast mode test for GMW''')
     t = time()
     morse = Morse(cuda=cuda, sfreq=1000)
+    # morse.mode = CWTMode.Normal
     result_morse = ncp.square(ncp.abs(
         morse.cwt(cp.array([sin]), ncp.arange(min_freq, max_freq, 1))))
     print(f'Morse {time() - t}')
 
     log.info('''Change to Normal mode test for GMW only for numpy''')
-    if not cuda:
-        morse.mode = CWTMode.Normal
 
     log.info('''Normal mode test
 Normal mode is only for numpy
 Because cupy 7.6.0 has no method named convolve''')
     nin_morlet = Morlet(cuda=False, sfreq=1000)
-    nin_morlet.mode = CWTMode.Convolve
+    nin_morlet.mode = CWTMode.Normal
     t = time()
     result_morlet = np.square(np.abs(
         nin_morlet.cwt(cp.asnumpy([sin]), np.arange(min_freq, max_freq, 1))))
@@ -226,7 +225,7 @@ def fft_wavelet_test() -> None:
     nin_morlet = Morlet(sigma=s, sfreq=1000)
     normal_morlet = Morlet(sigma=s, sfreq=1000)
     normal_morlet.mode = CWTMode.Normal
-    w = morse.make_wavelets([hz])
+    w = morse.make_wavelets([hz])[0]
     a = morse.make_fft_wavelets([hz])[0]
     b = nin_morlet.make_wavelets([hz])[0]
     c = nin_morlet.make_fft_wavelets([hz])[0]
@@ -240,7 +239,7 @@ def fft_wavelet_test() -> None:
     ax.plot(np.abs(c.real), label='FFTed Morlet wavelet')
     ax.plot(np.abs(fft(d)), label='MNE morlet')
     ax.plot(c.imag, label='imag of FFTed Morlet wavelet')
-    ax.plot(normal_morlet.make_wavelets([hz]), label='Morlet Wavelet Normal Mode')
+    ax.plot(normal_morlet.make_wavelets([hz])[0], label='Morlet Wavelet Normal Mode')
     handler, label = ax.get_legend_handles_labels()
     ax.legend(label, loc='upper right')
     plt.show()
@@ -281,6 +280,7 @@ def speed_wavelet_test() -> None:
 def speed_test(i: int) -> None:
     length = 1
     repeat = 100
+    repeat_s = 10
     freq_range = 30, 500
     t = time()
     sin = make_example(length, False, False)
@@ -288,6 +288,7 @@ def speed_test(i: int) -> None:
     wv = make_example(length, False)
     wv_mne = np.array([make_example(length, False)])
     freqs = np.arange(freq_range[0], freq_range[1], 1)
+    c_freqs = cp.arange(freq_range[0], freq_range[1], 1)
 
 
     #====================
@@ -295,7 +296,7 @@ def speed_test(i: int) -> None:
     #====================
     from scipy import signal
     t = time()
-    for n in range(repeat):
+    for n in range(repeat_s):
         result_sci = np.abs(signal.cwt(wv, signal.morlet2, freqs)) ** 2
     scipy_time = time() - t
     print(f'Scipy morlet {scipy_time}')
@@ -305,7 +306,7 @@ def speed_test(i: int) -> None:
     #====================
     t = time()
     mne_morlet = morlet(1000, freqs)
-    for n in range(repeat):
+    for n in range(repeat_s):
         result_mne = np.square(np.abs(cwt(wv_mne, mne_morlet)[0]))
     mne_time = time() - t
     print(f'MNE morlet {mne_time}')
@@ -313,12 +314,12 @@ def speed_test(i: int) -> None:
     #====================
     # NinWavelet
     #====================
-    sp_c_sin = cp.array([sin for n in range(repeat)])
+    sp_c_sin = cp.array([sin for n in range(repeat_s)])
     nin_morlet = Morlet(cuda=True, sfreq=1000)
     c_sin = cp.array(sin)
 
     t = time()
-    result_morlet_cuda = nin_morlet.power(sp_c_sin, freqs)
+    result_morlet_cuda = nin_morlet.power(sp_c_sin, c_freqs)
     print(result_morlet_cuda[-1, -1, -1])
     ninwavelet_time_2d_cuda = time() - t
     print(f'Ninwavelets cuda 2d morlet {ninwavelet_time_2d_cuda}')
@@ -326,15 +327,16 @@ def speed_test(i: int) -> None:
     t = time()
     nin_morlet_tmp = Morlet(cuda=True, sfreq=1000, cache_limit=1)
     for n in range(repeat):
-        result_morlet = nin_morlet_tmp.power(c_sin, freqs)
+        result_morlet = nin_morlet_tmp.power(c_sin, c_freqs)
     print(result_morlet_cuda[-1, -1, -1])
     ninwavelet_time_cuda = time() - t
     print(f'Ninwavelets cuda morlet {ninwavelet_time_cuda}')
 
     nin_morlet_tmp = Morlet(cuda=True, sfreq=1000, cache_limit=0)
+    nin_morlet_tmp.mode = CWTMode.Normal
     t = time()
     for n in range(repeat):
-        result_morlet = nin_morlet_tmp.power(c_sin, np.arange(freq_range[0], freq_range[1], 1))
+        result_morlet = nin_morlet_tmp.power(c_sin, c_freqs)
     print(result_morlet_cuda[-1, -1, -1])
     ninwavelet_time_cuda_slow = time() - t
     print(f'Ninwavelets cuda slow morlet {ninwavelet_time_cuda_slow}')
@@ -343,11 +345,11 @@ def speed_test(i: int) -> None:
     nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=0)
     t = time()
     for n in range(repeat):
-        result_morlet = nin_morlet.power(sin, np.arange(freq_range[0], freq_range[1], 1))
+        result_morlet = nin_morlet.power(sin, freqs)
     ninwavelet_time_slow = time() - t
     print(f'Ninwavelets slow morlet {ninwavelet_time_slow}')
 
-    nin_morlet = Morlet(cuda=False, sfreq=1000)
+    nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=1)
     sp_sin = np.array([sin for n in range(repeat)])
     t = time()
     for n in range(repeat):
@@ -361,7 +363,7 @@ def speed_test(i: int) -> None:
     from swan import pycwt
     swan_morlet = pycwt.Morlet()
     t = time()
-    for n in range(repeat):
+    for n in range(repeat_s):
         r = np.abs(pycwt.cwt_f(wv, freqs, 1000, swan_morlet)) ** 2
     swan_time = time() - t
     print(f'Swan morlet {swan_time}')
@@ -393,7 +395,7 @@ def tune(wave: Array) -> None:
 def tune_cuda(wave: Array, repeat: int) -> None:
     morse = Morse(cuda=True)
     for n in range(repeat):
-        result = morse.power(wave, freqs)
+        result = morse.power(wave, cp.arange(30, 150))
 
 def tune_2d(wave: Array) -> None:
     morse = Morse(cuda=True)
@@ -455,8 +457,8 @@ if __name__ == '__main__':
         sp_cp_wave = cp.array([cp_wave for n in range(500)])
         freqs = np.geomspace(1, 10, 1000)
         # tune(wave)
-        tune_cuda(cp_wave, 500)
-        tune_2d(sp_cp_wave)
+        tune_cuda(cp_wave, 1000)
+        # tune_2d(sp_cp_wave)
     if 'wavelet_speed' in argv:
         speed_wavelet_test()
     if 'window' in argv:

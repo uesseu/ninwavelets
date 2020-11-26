@@ -308,7 +308,6 @@ class WaveletGenerator:
         self.mode: CWTMode = CWTMode.Fast
         self.sfreq: float = sfreq
         self.wave_length: int = int(real_wave_length * sfreq)
-        self._freq_dist: float
         self.cuda: bool = cuda
         self.freqs: Optional[Array] = None
         self.fft_wavelets: Optional[Array] = None
@@ -337,60 +336,8 @@ class WaveletGenerator:
             Timeline to calculate wavelet.
         '''
         ncp = cp if self.cuda else np
-        result = ncp.arange(0, wave_length, 1) / freq
-        return result
+        return ncp.arange(0, wave_length, 1) / freq
 
-    def _setup_waveletshape(self, freq: float, real_length: float = 1,
-                            zero_mean: bool = False) -> Array:
-        '''
-        Setup wave shape.
-
-        Parameters
-        ----------
-        freq: float
-            Base Frequency. For example, 1.
-            It must be base frequency.
-            You cannot use this for every freqs.
-        zero_mean: bool
-            Let the center of wave time zero.
-
-        Returns
-        ----------
-        Tuple[float, float]: (one, total)
-        '''
-        times = (-self.wave_length / 2, self.wave_length / 2, 1) if zero_mean\
-            else (0., self.wave_length, 1)
-        result = np.arange(*times)\
-            * (2 * freq * np.pi / (self.formula.peak_freq(freq) * self.sfreq))
-        return cp.asarray(result, np.float64) if self.cuda else result
-
-    def _make_fft_wavelet(self, freq: float, real_length: float = 1.) -> Array:
-        ''' Make single FFTed wavelet.
-
-        Parameters
-        ----------
-        freq: float
-            Frequency of wavelet.
-
-        Returns
-        ----------
-        np.ndarray[np.complex128, ndim=1]: FFTed Wavelet.
-        '''
-        ncp = cp if self.cuda else np
-        if freq == 0:
-            raise ZeroDivisionError
-        if self.mode in [CWTMode.Fast]:
-            t = self._setup_trans_shape(real_length, self.wave_length)
-            result = self.formula.get_trans_formula(self.cuda)(t, freq)
-            return result / self._get_wavelet_norm(ncp.fft.ifft(result), (0,))
-        else:
-            wavelet = self._make_wavelet(freq)
-            half = int((self.wave_length - wavelet.shape[0]) / 2)
-            wavelet = ncp.hstack((ncp.zeros(half), wavelet, ncp.zeros(half)))
-            result = ncp.fft.fft(wavelet)
-            result.imag = ncp.abs(result.imag)
-            result.real = ncp.abs(result.real)
-            return result
 
     def make_fft_wavelets(self, freqs: Array, real_length: float = 1.) -> Array:
         ''' Make single FFTed wavelet.
@@ -410,30 +357,20 @@ class WaveletGenerator:
         if self.check and isinstance(freqs, list):
             freqs = np.array(freqs)
         if self.mode in [CWTMode.Fast]:
-            if False:
-                # Make timeline
-                t = ncp.tile(
-                    self._setup_trans_shape(real_length, self.wave_length),
-                    (freqs.shape[0], 1))
-                # Make fft wavelets
-                many_freqs = ncp.tile(freqs, (t.shape[1], 1)).T
-            else:
-                t, many_freqs = ncp.meshgrid(
-                    self._setup_trans_shape(real_length, self.wave_length),
-                                            cp.asarray(freqs))
+            t, many_freqs = ncp.meshgrid(
+                self._setup_trans_shape(real_length, self.wave_length),
+                                        ncp.asarray(freqs))
             result = self.formula.get_trans_formula(self.cuda)(t, many_freqs)
             # Adjust norm
             divs = self._get_wavelet_norm(result, (1,))
-            tiled_div = ncp.tile(divs, (result.shape[1], 1)).T
-            result = result / tiled_div * np.sqrt(self.wave_length)
-            # result = result / divs
+            result = result / divs[:, ncp.newaxis] * np.sqrt(self.wave_length)
             self.fft_wavelets = result
             return result
         else:
             logger.info('Making ffted wavelet.')
-            self._freq_dist = freqs[1] - freqs[0]
-            make_w = partial(self._make_fft_wavelet, real_length=real_length)
-            self.fft_wavelets = ncp.array(tuple(map(make_w, freqs)))
+            wavelets = ncp.fft.fft(self.make_wavelets(freqs))
+            wavelets.real, wavelets.imag = ncp.abs(wavelets.real), ncp.imag(wavelets.imag)
+            self.fft_wavelets = wavelets
             return self.fft_wavelets
 
     def _get_wavelet_norm(self, wavelet: Array,
@@ -448,37 +385,6 @@ class WaveletGenerator:
         '''
         norm = cp.linalg.norm if self.cuda else np.linalg.norm
         return NORM_CONSTANT * norm(wavelet, axis=axis)
-
-
-    def _make_wavelet(self, freq: float) -> Array:
-        '''
-        Make single wavelet and return.
-
-        Parameters
-        ----------
-        freq: float
-
-        Returns
-        ----------
-        Wavelet: Union[cp.ndarray, np.ndarray]
-        '''
-        ncp = cp if self.cuda else np
-        if freq == 0:
-            raise ZeroDivisionError
-        if self.mode in [CWTMode.Reverse, CWTMode.Fast]:
-            timeline = self._setup_trans_shape(freq, self.wave_length)
-            wavelet = ncp.fft.ifft(
-                self.formula.get_trans_formula(self.cuda)(timeline))
-            half = int(wavelet.shape[0])
-            start, stop = half // 2, half // 2 * 3
-            wavelet = ncp.hstack((ncp.conj(ncp.flip(wavelet, 0)),
-                                  wavelet))[start: stop]
-            wavelet /= self._get_wavelet_norm(wavelet)
-        else:
-            timeline = self._setup_waveletshape(freq, 1, zero_mean=True)
-            wavelet = self.formula.get_formula(self.cuda)(timeline, freq)
-            wavelet /= self._get_wavelet_norm(wavelet)
-        return wavelet
 
 
     def make_wavelets(self, freqs: Numbers) -> Array:
@@ -508,12 +414,10 @@ class WaveletGenerator:
             timelines: Array = ncp.array(tuple(self._setup_trans_shape(
                 freq, self.wave_length)
                               for freq in freqs))
-            wavelet = ncp.fft.ifft(self.formula.get_trans_formula(
-                self.cuda)(timelines))
-            # if self.cuda:
-            #     wavelet = cp.fft.ifft(self.formula.cp_trans_formula(timelines))
-            # else:
-            #     wavelet = np.fft.ifft(self.formula.trans_formula(timelines))
+            if self.cuda:
+                wavelet = cp.fft.ifft(self.formula.cp_trans_formula(timelines))
+            else:
+                wavelet = np.fft.ifft(self.formula.trans_formula(timelines))
             half: int = int(wavelet.shape[-1])
             start, stop = half // 2, half // 2 * 3
             wavelet = ncp.hstack(
@@ -522,13 +426,11 @@ class WaveletGenerator:
             tiled_norm = ncp.tile(norms, (wavelet.shape[1], 1)).T
             wavelet = wavelet / tiled_norm
         else:
-            timeline = ncp.array(
-                [self._setup_waveletshape(freq, 1, zero_mean=True)
-                 for freq in freqs])
-            wavelet = self.formula.get_formula(self.cuda)(timeline, freqs)
-            divs = ncp.array(self._get_wavelet_norm(wavelet, (1,)))
-            tiled_div = ncp.tile(divs, (wavelet.shape[1], 1)).T
-            wavelet = wavelet / tiled_div
+            t = (ncp.arange(0, self.wave_length, 1) - self.wave_length/2)\
+                / self.sfreq * 2 * np.pi *\
+                (freqs / self.formula.peak_freq(freqs))[:, ncp.newaxis]
+            wavelet = self.formula.get_formula(self.cuda)(t)
+            wavelet /= ncp.array(self._get_wavelet_norm(wavelet, (1,)))[:, np.newaxis]
         self.wavelets = wavelet
         return wavelet
 
@@ -650,7 +552,7 @@ class WaveletMultiplier(WaveletsContainer):
             else:
                 self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
                 if((self.cache_limit is None) or
-                   0 < self.cache_limit < len(self._kept['fft'])):
+                   self.cache_limit > len(self._kept['fft'])):
                     self._kept['fft'].update({sid: self.fft_wavelets})
         ncp = cp if self.cuda else np
         # logger.info('Applying FFT mul.')
