@@ -28,7 +28,6 @@ Floats = Optional[Tuple[float, float]]
 NORM_CONSTANT: float = np.sqrt(0.5)
 
 
-
 def cp_alloc(array: np.ndarray) -> np.ndarray:
     buf: np.ndarray = np.frombuffer(cp.cuda.alloc_pinned_memory(array.nbytes),
                                     array.dtype,
@@ -354,16 +353,16 @@ class WaveletGenerator:
         ncp = cp if self.cuda else np
         if freqs[0] == 0:
             raise ZeroDivisionError
-        if self.check and isinstance(freqs, list):
-            freqs = np.array(freqs)
+        # if self.check and isinstance(freqs, list):
+        #     freqs = np.array(freqs)
         if self.mode in [CWTMode.Fast]:
             t, many_freqs = ncp.meshgrid(
-                self._setup_trans_shape(real_length, self.wave_length),
-                                        ncp.asarray(freqs))
+                self._setup_trans_shape(real_length, self.wave_length), freqs)
             result = self.formula.get_trans_formula(self.cuda)(t, many_freqs)
             # Adjust norm
             divs = self._get_wavelet_norm(result, (1,))
-            result = result / divs[:, ncp.newaxis] * np.sqrt(self.wave_length)
+            result *= np.sqrt(self.wave_length)
+            result /= divs[:, ncp.newaxis]
             self.fft_wavelets = result
             return result
         else:
@@ -457,6 +456,10 @@ class WaveletsContainer(WaveletGenerator):
         self._kept: Dict[str, Dict[str, Array]] = {'fft': {}, 'wavelet': {}}
 
     def _get_kept_wavelets(self, wave: Array, freqs: Array) -> None:
+        """
+        Get a wavelet.
+        This is slow, and not be used in FFT based CWT method.
+        """
         sid: str = ''.join((str(wave.shape), str(id(freqs))))
         if sid in self._kept['wavelet'].keys():
             self.wavelets = self._kept['wavelet'][sid]
@@ -475,9 +478,11 @@ class WaveletConvolver(WaveletsContainer):
                      reuse_wavelets: bool, logger: Logger = logger) -> Array:
         '''
         Backend of cwt in convolve mode. This is not optimized yet.
-        Some obsessive people hates DFT and it may be needed.
-        And ofcource, I understand their opinions.
-        But, because it is hobby, for me, it does not take priority.
+        Some obsessive people hates DFT and this method may be needed.
+        Ofcource, I understand their opinions, but seems to be too obsessive.
+        Some of them cannot permit DFT because of zero padding.
+        FFT of numpy does not perform zeropadding, I think.
+        Either way, because it is hobby for me, it does not take priority.
 
         Parameters
         ----------
@@ -512,7 +517,7 @@ class WaveletConvolver(WaveletsContainer):
 
 class WaveletMultiplier(WaveletsContainer):
     """
-    CWT class which performs cwt by fft.
+    CWT class which performs CWT by FFT.
     """
 
     def _cwt_fft(self, wave: Array, freqs: Numbers,
@@ -568,6 +573,9 @@ class WaveletMultiplier(WaveletsContainer):
             to_ifft = self.fft_wavelets * cx_fft.fft(wave, plan=self._fft_plan)
             if remake_plan:
                 self._ifft_plan = cx_fft.get_fft_plan(to_ifft, axes=(1,))
+            if self.cache_limit == 0:
+                self.fft_wavelets = None
+                self._kept['fft'] = {}
             return cx_fft.ifft(to_ifft, plan=self._ifft_plan)
         return ncp.fft.ifft(self.fft_wavelets * ncp.fft.fft(wave))
 

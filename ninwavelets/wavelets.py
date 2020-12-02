@@ -91,22 +91,25 @@ class MorletFormula(WaveletFormula):
                                 - 2 * np.exp(-3 / 4 * np.square(self.sigma)),
                                 -1/2)
         self.k = 0 if gabor else np.exp(-np.float_power(self.sigma, 2) / 2)
+        self.a = self.c * np.power(np.pi, (-1/4))
 
     def cp_trans_formula(self, freqs: cp.ndarray,
                          freq: float = 1.) -> cp.ndarray:
         peak_freq = self.sigma / (1. - cp.exp(-self.sigma * freq))
-        freqs /= freq
-        freqs *= peak_freq
-        result = (self.c * cp.power(cp.pi, (-1/4)) *
-                  (cp.exp(-cp.square(self.sigma-freqs) / 2) -
-                   self.k * cp.exp(-cp.square(freqs) / 2)))
-        return result
+        frq = freq / peak_freq
+        freqs /= frq
+        pl = None if self.k == 0 else self.k * cp.exp(-cp.square(freqs) / 2)
+        if pl is None:
+            return self.a * (cp.exp(-cp.square(self.sigma-freqs) / 2))
+        else:
+            return self.a * (cp.exp(-cp.square(self.sigma-freqs) / 2) - pl)
 
     def trans_formula(self, freqs: np.ndarray, freq: float = 1) -> np.ndarray:
-        freqs = freqs / freq * self.peak_freq(freq)
-        return (self.c * np.float_power(np.pi, -1/4)
-                * (np.exp(-np.square(self.sigma-freqs) / 2)
-                   - self.k * np.exp(-np.square(freqs) / 2)))
+        peak_freq = self.sigma / (1. - np.exp(-self.sigma * freq))
+        frq = freq / peak_freq
+        freqs /= frq
+        pl = 0 if self.k == 0 else self.k * np.exp(-np.square(freqs) / 2)
+        return self.a * (np.exp(-np.square(self.sigma-freqs) / 2) - pl)
 
     def cp_formula(self, timeline: cp.ndarray, freq: float = 1) -> np.ndarray:
         return (self.c * (cp.pi ** (-1 / 4))
