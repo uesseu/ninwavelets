@@ -73,6 +73,9 @@ and then, run
 pip install cupy
 ```
 
+When you import ninwavelets, it tries to import cupy.  
+If cupy could not be imported, it does not raise error but reports it.  
+
 # Usage
 - At first, import wavelets and import numpy or cupy.
 - The wave must be numpy or cupy data.
