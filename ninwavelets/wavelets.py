@@ -34,7 +34,6 @@ class MorseFormula(WaveletFormula):
 class Morse(WaveletBase):
     '''
     Morse Wavelets.
-    It is new wavelet, which is orthonormal.
     Unlike Morlet Wavelets, it is robust for any parameters.
     Originally, Generalized Morse wavelet is
     Frourier transformed wave.
@@ -130,7 +129,6 @@ class Morlet(WaveletBase):
     Morlet Wavelets.
     A traditional analystic wavelet, which is used widely.
     When sigma value is too small, the wavelet waveform is distorted.
-    It is like Gabor Wavelet, which is not orthonormal.
 
     Example.
     >>> morlet = Morlet(1000, sigma=7.)
@@ -230,7 +228,10 @@ class MexicanHat(WaveletBase):
 
 class ShannonFormula(WaveletFormula):
     def trans_formula(self, tc: np.ndarray, freq: float = 1) -> np.ndarray:
-        return np.where(tc <= 1., 1., 0)
+        return np.where(np.abs(tc/freq - 1.5) <= 0.5, 1., 0)
+
+    def cp_trans_formula(self, tc: cp.ndarray, freq: float = 1) -> cp.ndarray:
+        return cp.where(cp.abs(tc/freq - 1.5) <= 0.5, 1., 0)
 
 class Shannon(WaveletBase):
     '''

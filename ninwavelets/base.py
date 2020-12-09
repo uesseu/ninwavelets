@@ -20,6 +20,9 @@ except ImportError as error:
     print(error)
     print('Cupy could not be loaded.')
     cp = np
+except BaseException as error:
+    print('Cuda could not imported!')
+    print(error)
 
 Numbers = Union[List[float], np.ndarray, range]
 Array = Union[np.ndarray, cp.ndarray]

@@ -1,7 +1,7 @@
 import numpy as np
 import cupy as cp
 from mpl_toolkits.mplot3d import Axes3D
-from typing import Any, Union
+from typing import Any, Union, Optional
 from multiprocessing import Pool
 import matplotlib.pyplot as plt
 import matplotlib
@@ -137,11 +137,12 @@ def cwt_test(cuda: bool = False, show: bool = False, random: bool = False) -> No
     log.info('''Normal mode test
 Normal mode is only for numpy
 Because cupy 7.6.0 has no method named convolve''')
-    nin_morlet = Morlet(cuda=False, sfreq=1000)
-    nin_morlet.mode = CWTMode.Normal
+    # nin_morlet = Morlet(cuda=False, sfreq=1000)
+    nin_morlet = Shannon(cuda=False, sfreq=1000)
+    # nin_morlet.mode = CWTMode.Normal
     t = time()
     result_morlet = np.square(np.abs(
-        nin_morlet.cwt(cp.array([sin]), cp.arange(min_freq, max_freq, 1))))
+        nin_morlet.cwt(cp.array([sin]), cp.arange(min_freq, max_freq, 1)/1.5)))
     print(f'Morlet {time() - t}')
     if cuda:
         sin = cp.asnumpy(sin)
@@ -191,29 +192,27 @@ Because cupy 7.6.0 has no method named convolve''')
 
 
 def other_wavelet_test() -> None:
-    hz = 10
+    hz = 30, 31
     s = 7
-    mexcan = MexicanHat().make_wavelets([hz])
-    shannon = Shannon().make_wavelets([hz])
-    morlet = Morlet(sigma=s).make_wavelets([hz])
-    plt.plot(mexcan)
-    plt.plot(shannon)
-    plt.plot(morlet)
+    shannon = Shannon().make_wavelets(hz)
+    morlet = Morlet(sigma=s).make_wavelets(hz)
+    plt.plot(shannon[0])
+    plt.plot(morlet[0])
     plt.show()
-    plt.plot(np.abs(fft(shannon)))
-    plt.plot(np.abs(fft(morlet)))
+    plt.plot(Morlet().make_fft_wavelets(hz)[0])
+    plt.plot(Shannon().make_fft_wavelets(hz)[0])
     plt.show()
-    sin = make_example(1, False)
+    # sin = make_example(1, False)
 
-    log.info('Other wavelets')
-    log.info('Haar wavelets')
-    result_haar = Haar(1000).power(sin, np.arange(1, 1000, 1))
-    plot_tf(result_haar)
+    # log.info('Other wavelets')
+    # log.info('Haar wavelets')
+    # result_haar = Haar(1000).power(sin, np.arange(1, 1000, 1))
+    # plot_tf(result_haar)
 
-    log.info('Other wavelets')
-    log.info('Mexican wavelets')
-    result_mexican = MexicanHat(1000).power(sin, np.arange(1, 1000, 1))
-    plot_tf(result_mexican)
+    # log.info('Other wavelets')
+    # log.info('Mexican wavelets')
+    # result_mexican = MexicanHat(1000).power(sin, np.arange(1, 1000, 1))
+    # plot_tf(result_mexican)
 
 
 def fft_wavelet_test() -> None:
@@ -280,7 +279,7 @@ def speed_wavelet_test() -> None:
 def speed_test(repeat: int) -> None:
     length = 2
     repeat_s = repeat
-    freq_range = 30, 500
+    freq_range = 30, 100
     t = time()
     sin = make_example(length, False, False)
     c_sin = make_example(length, True, False)
@@ -313,12 +312,13 @@ def speed_test(repeat: int) -> None:
     #====================
     # NinWavelet
     #====================
-    sp_c_sin = cp.array([sin for n in range(repeat)])
+    sp_c_sin = cp.array([sin for n in range(10)])
     nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=1)
     c_sin = cp.array(sin)
 
     t = time()
-    result_morlet_cuda = nin_morlet.power(sp_c_sin, c_freqs)
+    for n in sp_c_sin // 10:
+        result_morlet_cuda = nin_morlet.power(sp_c_sin, c_freqs)
     print(result_morlet_cuda[-1, -1, -1])
     ninwavelet_time_2d_cuda = time() - t
     print(f'Ninwavelets cuda 2d morlet {ninwavelet_time_2d_cuda}')
@@ -400,11 +400,11 @@ def tune(wave: Array) -> None:
     for n in range(10):
         result = morse.power(wave, freqs)
 
-def tune_cuda(wave: Array, repeat: int) -> None:
-    cuda = True
+def tune_cuda(wave: Array, repeat: Optional[int] = None) -> None:
+    cuda = False
     ncp = cp if cuda else np
-    morlet = Morlet(sfreq=1000, real_wave_length=2, cuda=cuda, cache_limit=0, gabor=True)
-    repeat = 100
+    morlet = Morlet(sfreq=2000, real_wave_length=2, cuda=cuda, cache_limit=0, gabor=True)
+    repeat = 100 if repeat is None else repeat
     t = time()
     freq = ncp.arange(1, 100, 1)
 
@@ -412,14 +412,14 @@ def tune_cuda(wave: Array, repeat: int) -> None:
     for n in range(repeat):
         result = morlet.make_fft_wavelets(freq)
         i= result[0, 0]
-    print(time() - t)
+    print((time() - t)/repeat)
     
     morlet.mode=CWTMode.Normal
     t = time()
     for n in range(repeat):
         result = morlet.make_fft_wavelets(freq)
         i= result[0, 0]
-    print(time() - t)
+    print((time() - t)/repeat)
 
 def tune_2d(wave: Array) -> None:
     morse = Morse(cuda=True)
@@ -443,9 +443,9 @@ if __name__ == '__main__':
     if 'sin' in argv:
         plot_sin_fft()
     if 'wave' in argv:
-        test3d()
-        fft_wavelet_test()
-        # other_wavelet_test()
+        # test3d()
+        # fft_wavelet_test()
+        other_wavelet_test()
     if '2d' in argv:
         test_2d()
     if 'cwt' in argv:
