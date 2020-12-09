@@ -535,8 +535,11 @@ it may has less functions than other packages.
 
 ## Fast coding of ninwavelets
 ### Skipping making wavelets
-It is not good for performance to make new wavelets every time,  
-if wave length is not changed every time.  
+Ninwavelets can make wavelets extremely fast.  
+This feature makes CWT flexible method.  
+But it is not good for performance to make new wavelets every time,  
+if wave length or parameters is not changed every time.  
+Further more, making numpy array or cupy arry takes much time.  
 And so, it memorizes wavelets after cwt.  
 
 This is the bad example
@@ -592,6 +595,7 @@ But ninwavelet is an "extreme fast CWT python package" and it is impossible to c
 
 Some mathmaticians may say, DFT is not precise way.  
 But we have no good method to perform Fourier transform by digital computer.  
+Is there a wave which does not change eternally like sin wave in nature?  
 Method of convolve may be good way for Wavelet transform.  
 But GMW needs Frourier transform.  
 Further more, convolving needs long long loooong time.  
@@ -616,18 +620,20 @@ iFFT(FFT(wave) * FFTed_wavelet)  # Not good but may be better than 2.
 ```
 
 I adopted method 3 as Fast mode. Not only GMW, but also Morlet wavelet transform will be performed by 3.
+By this feature, wavelets can be yielded fast, especially Gabor wavelet takes only half time.  
 
 ## It is just my hobby
-This project is just my hobby, and I am not an engineer or scholar, just a nurd.  
+This project was just my hobby. Now, I am developping this as work.  
+But, I am not an engineer or scholar, just a nurd.  
 If you cannot believe a nurd without licence of PHD or python engineer,  
-just ignore it and enjoy slow life.  
+just ignore it and enjoy slow life!  
 
 # Contribution
 I am glad to receive contribution.  
 I want to hear constructive oppinions, if I could.  
 
 # Licence
-Copyright (c) 2020 Forest Segne
+Copyright (c) 2020 Shoichiro Nakanishi
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
@@ -665,7 +671,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     + Endless!
 - [x] Licence
     + [x] Whether write my name or not.
-        * [x] I wrote one of my handle name.
+        * [x] I wrote one of my handle name, but now my realname.
     + [x] Which licence to use.
         * [x] MIT licence.
 - [ ] CUPY related limitation
