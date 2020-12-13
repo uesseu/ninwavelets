@@ -7,7 +7,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from functools import partial, reduce
 from operator import mul
 from logging import getLogger, INFO, basicConfig, NullHandler, Logger
-import gc
+import pyximport
+pyximport.install()
+from . import factor
 
 logger = getLogger('ninwavelets')
 logger.addHandler(NullHandler())
@@ -15,6 +17,8 @@ logger.addHandler(NullHandler())
 try:
     import cupy as cp
     import cupyx.scipy.fftpack as cx_fft
+    # This is warming up for cupy.
+    cp.fft.fft(cp.arange(1, 10, 1))
     cp.fft.ifft(cp.arange(1, 10, 1))
 except ImportError as error:
     print(error)
@@ -356,8 +360,6 @@ class WaveletGenerator:
         ncp = cp if self.cuda else np
         if freqs[0] == 0:
             raise ZeroDivisionError
-        # if self.check and isinstance(freqs, list):
-        #     freqs = np.array(freqs)
         if self.mode in [CWTMode.Fast]:
             t, many_freqs = ncp.meshgrid(
                 self._setup_trans_shape(real_length, self.wave_length), freqs)
@@ -370,9 +372,9 @@ class WaveletGenerator:
             return result
         else:
             logger.info('Making ffted wavelet.')
-            wavelets = ncp.fft.fft(self.make_wavelets(freqs))
-            wavelets.real, wavelets.imag = ncp.abs(wavelets.real), ncp.imag(wavelets.imag)
-            self.fft_wavelets = wavelets
+            w = ncp.fft.fft(self.make_wavelets(freqs))
+            w.real, w.imag = ncp.abs(w.real), ncp.imag(w.imag)
+            self.fft_wavelets = w
             return self.fft_wavelets
 
     def _get_wavelet_norm(self, wavelet: Array,
@@ -411,7 +413,7 @@ class WaveletGenerator:
         if freqs[0] == 0:
             raise ZeroDivisionError
         if self.check and isinstance(freqs, list):
-            freqs = np.array(freqs)
+            freqs = ncp.array(freqs)
         if self.mode in [CWTMode.Reverse, CWTMode.Fast]:
             timelines: Array = ncp.array(tuple(self._setup_trans_shape(
                 freq, self.wave_length)
@@ -432,7 +434,8 @@ class WaveletGenerator:
                 / self.sfreq * 2 * np.pi *\
                 (freqs / self.formula.peak_freq(freqs))[:, ncp.newaxis]
             wavelet = self.formula.get_formula(self.cuda)(t)
-            wavelet /= ncp.array(self._get_wavelet_norm(wavelet, (1,)))[:, np.newaxis]
+            wavelet /= ncp.array(
+                self._get_wavelet_norm(wavelet, (1,)))[:, np.newaxis]
         self.wavelets = wavelet
         return wavelet
 
@@ -524,7 +527,8 @@ class WaveletMultiplier(WaveletsContainer):
     """
 
     def _cwt_fft(self, wave: Array, freqs: Numbers,
-                reuse_wavelets: bool = True, logger: Logger = logger) -> Array:
+                 reuse_wavelets: bool = True, logger: Logger = logger,
+                 pad: bool = False) -> Array:
         '''cwt
         Run CWT based on fft.
 
@@ -620,7 +624,7 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
     '''
 
     def cwt(self, wave: Array, freqs: Union[Numbers, None],
-            logger: Logger = logger) -> Array:
+            logger: Logger = logger, padding: bool = False) -> Array:
         '''Perform CWT
 
         Parameters
@@ -641,11 +645,25 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
             reuse_wavelets = True
         self.freqs = freqs
         self.wave_length = wave.shape[-1]
+        original_wave_length = self.wave_length
         if self.mode in [CWTMode.Fast, CWTMode.Normal]:
-            if self.check and isinstance(wave, cp.ndarray):
-                logger.info('Cuda is enabled.')
-                self.cuda = True
-            return self._cwt_fft(wave, freqs, reuse_wavelets, logger)
+            if self.check:
+                wave_is_cp = isinstance(wave, cp.ndarray)
+                freq_is_cp = isinstance(freqs, cp.ndarray)
+                if wave_is_cp or freq_is_cp:
+                    logger.info('Cuda is enabled.')
+                    if not wave_is_cp:
+                        wave = cp.asarray(wave)
+                    if not freq_is_cp:
+                        freqs = cp.asarray(freqs)
+                    self.cuda = True
+                else:
+                    self.cuda = False
+            self.wave_length = factor.factor(wave.shape[-1], 7) if padding else wave.shape[-1]
+            ncp = cp if self.cuda else np
+            wave = ncp.pad(wave, (0, self.wave_length - wave.shape[-1]))
+            result = self._cwt_fft(wave, freqs, reuse_wavelets, logger, padding)
+            return result[:, :original_wave_length] if padding else result
         if self.cuda:
             logger.warn('''
 Cuda is disabled, because cupy cannot convolve in this version.

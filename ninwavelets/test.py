@@ -38,7 +38,7 @@ def make_example(length: float = 3, cuda: bool = True, random: bool = True) -> n
     ncp = cp if cuda else np
     time: ncp.ndarray = ncp.arange(0, length, 0.001)
     if random:
-        return ncp.random.random(length * 1000)
+        return ncp.random.random(int(length * 1000))
     sin = ncp.array(ncp.sin(time * freq * 2 * ncp.pi) +
                    ncp.sin(time * 160 * 2 * ncp.pi) * ncp.sin(time * ncp.pi) +
                    ncp.sin(ncp.pad(ncp.arange(0, length / 2, 0.001),
@@ -432,6 +432,24 @@ def test_2d() -> None:
     morse.cwt(wv, freqs)
     morse.cwt(wv[0], freqs)
 
+def pad() -> None:
+    import factor
+    print(factor.factor(1001, 7))
+    morlet = Morlet(1000)
+    wv = make_example(1.0015, cuda=True)
+    freqs = cp.arange(30, 500, 1)
+    t = time()
+    for n in range(100):
+        x = morlet.cwt(wv, freqs, padding=True)
+    print(x.shape)
+    print(time() - t)
+    morlet = Morlet(1000)
+    t = time()
+    for n in range(100):
+        x = morlet.cwt(wv, freqs)
+    print(x.shape)
+    print(time() - t)
+
 
 if __name__ == '__main__':
     print('Test Run')
@@ -509,3 +527,5 @@ if __name__ == '__main__':
         print(time() - t)
         plt.imshow(np.abs(res[50]))
         plt.show()
+    if 'pad' in argv:
+        pad()
