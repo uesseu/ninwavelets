@@ -1,6 +1,6 @@
 # NinWavelets
 This is a python package for analystic wavelet transform.  
-Morlet, Shannon, Generalized Morse(GMW) and so on.  
+Morlet, Generalized Morse(GMW) and so on.  
 Generally, CWT is very slow. But this is extremely fast for a python package.  
 It is based on Numpy or Cupy, and it may be fast especially on Cupy.  
 
@@ -25,7 +25,6 @@ Please see Advantages and Limitations.
 - Use wavelets various wavelets
     + Generalized Morse(A flexible wavelet, which has two parameters.)
     + Morlet/Gabor(Frourier transformed version of Morlet/Gabor.)
-    + Shannon(It looks like Haar, when fourier transformed.)
     + Mexcan hat
     + May be more(It is easy to scale!)
 - Skipping one FFT when performing CWT.
@@ -301,7 +300,6 @@ from nin_wavelets import Morse
 |-------------------|----------------------------------------|
 | Generalized Morse | Morse                                  |
 | Complex Morlet    | Morlet                                 |
-| Complex Shannon   | Shannon                                |
 | Gausian(Gabor)    | Morlet(gabor option is available)      |
 | MexicanHat        | MexicanHat                             |
 | Haar              | Haar(This is not good in ninwavelets!) |
@@ -650,7 +648,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     + [x] Gabor
         * [x] Compared with mne
     + [x] Mexican hat
-    + [x] Shannon
     + [x] Haar
     + [x] Scalability for unknown wavelets
 - More methods
@@ -658,7 +655,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         * It will not be written. It must be a user's work.
         * "Make each program do one thing well."
     + [ ] DWT
-        * But, if you want to perform DWT, using np.exp2 may works well.
+        * [ ] Shannon
+        * [ ] Haar
     + [ ] 2D wavelet
         * [x] FastMode
         * [x] Convolve
