@@ -314,12 +314,13 @@ class WaveletGenerator:
         self.mode: CWTMode = CWTMode.Fast
         self.sfreq: float = sfreq
         self.wave_length: int = int(real_wave_length * sfreq)
+        self.wave: Optional[Array] = None
         self.cuda: bool = cuda
         self.freqs: Optional[Array] = None
         self.fft_wavelets: Optional[Array] = None
         self.wavelets: Optional[Array] = None
         self.formula: WaveletFormula
-        self.check = bool
+        self.check = check
 
     def _setup_trans_shape(self, freq: float, wave_length: int) -> Array:
         '''
@@ -623,8 +624,23 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
     You need to write methods to make single wavelet.
     '''
 
+    def _check_type(self, wave: Array, freqs: Array) -> Tuple[Array, Array]:
+        wave_is_cp = isinstance(wave, cp.ndarray)
+        freq_is_cp = isinstance(freqs, cp.ndarray)
+        if wave_is_cp or freq_is_cp:
+            logger.info('Cuda is enabled.')
+            if not wave_is_cp:
+                wave = cp.asarray(wave)
+            if not freq_is_cp:
+                freqs = cp.asarray(freqs)
+            self.cuda = True
+        else:
+            self.cuda = False
+        return wave, freqs
+
     def cwt(self, wave: Array, freqs: Union[Numbers, None],
-            logger: Logger = logger, padding: bool = False) -> Array:
+            logger: Logger = logger, padding: bool = False,
+            ) -> Array:
         '''Perform CWT
 
         Parameters
@@ -648,20 +664,16 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
         original_wave_length = self.wave_length
         if self.mode in [CWTMode.Fast, CWTMode.Normal]:
             if self.check:
-                wave_is_cp = isinstance(wave, cp.ndarray)
-                freq_is_cp = isinstance(freqs, cp.ndarray)
-                if wave_is_cp or freq_is_cp:
-                    logger.info('Cuda is enabled.')
-                    if not wave_is_cp:
-                        wave = cp.asarray(wave)
-                    if not freq_is_cp:
-                        freqs = cp.asarray(freqs)
-                    self.cuda = True
-                else:
-                    self.cuda = False
-            self.wave_length = factor.factor(wave.shape[-1], 7) if padding else wave.shape[-1]
+                wave, freqs = self._check_type(wave, freqs)
+            self.wave_length = wave.shape[-1]
             ncp = cp if self.cuda else np
-            wave = ncp.pad(wave, (0, self.wave_length - wave.shape[-1]))
+            if padding:
+                self.wave_length = factor.factor(wave.shape[-1], 7)
+                if self.wave is None:
+                    self.wave = ncp.zeros(self.wave_length)
+                self.wave[:wave.shape[-1]] = wave[:]
+                wave = self.wave
+            # wave = ncp.pad(wave, (0, self.wave_length - wave.shape[-1]))
             result = self._cwt_fft(wave, freqs, reuse_wavelets, logger, padding)
             return result[:, :original_wave_length] if padding else result
         if self.cuda:
