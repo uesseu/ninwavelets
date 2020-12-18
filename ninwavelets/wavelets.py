@@ -4,6 +4,7 @@ import numpy as np
 try:
     import cupy as cp
 except ImportError as error:
+    cp = np
     print(error)
     print('Cupy could not be loaded.')
 
