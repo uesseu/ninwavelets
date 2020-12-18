@@ -460,6 +460,7 @@ class WaveletsContainer(WaveletGenerator):
         super(WaveletsContainer, self).__init__(
              sfreq, real_wave_length, cuda)
         self.cache_limit = cache_limit
+        self.cache_num = 0
         self._kept: Dict[str, Dict[str, Array]] = {'fft': {}, 'wavelet': {}}
 
     def _get_kept_wavelets(self, wave: Array, freqs: Array) -> None:
@@ -565,8 +566,9 @@ class WaveletMultiplier(WaveletsContainer):
             else:
                 self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
                 if((self.cache_limit is None) or
-                   self.cache_limit > len(self._kept['fft'])):
+                   self.cache_limit > self.cache_num):
                     self._kept['fft'].update({sid: self.fft_wavelets})
+                    self.cache_num += 1
         ncp = cp if self.cuda else np
         # logger.info('Applying FFT mul.')
         # This 7 lines makes this fast a little.
