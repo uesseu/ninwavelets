@@ -561,7 +561,10 @@ class WaveletMultiplier(WaveletsContainer):
             if self.cuda:
                 remake_plan = True
             sid = ''.join((str(wave_shape), str(id(freqs))))
-            if sid in self._kept['fft'].keys():
+            if self.cache_limit == 1:
+                if self.fft_wavelets is None:
+                    self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
+            elif sid in self._kept['fft'].keys():
                 self.fft_wavelets = self._kept['fft'][sid]
             else:
                 self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
