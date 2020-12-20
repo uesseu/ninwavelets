@@ -560,18 +560,22 @@ class WaveletMultiplier(WaveletsContainer):
         if (not reuse_wavelets) or (self.fft_wavelets is None):
             if self.cuda:
                 remake_plan = True
-            sid = ''.join((str(wave_shape), str(id(freqs))))
             if self.cache_limit == 1:
                 if self.fft_wavelets is None:
                     self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
-            elif sid in self._kept['fft'].keys():
-                self.fft_wavelets = self._kept['fft'][sid]
-            else:
-                self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
-                if((self.cache_limit is None) or
-                   self.cache_limit > self.cache_num):
+                    sid = ''.join((str(wave_shape), str(id(freqs))))
                     self._kept['fft'].update({sid: self.fft_wavelets})
                     self.cache_num += 1
+            else:
+                sid = ''.join((str(wave_shape), str(id(freqs))))
+                if sid in self._kept['fft'].keys():
+                    self.fft_wavelets = self._kept['fft'][sid]
+                else:
+                    self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
+                    if((self.cache_limit is None) or
+                       self.cache_limit > self.cache_num):
+                        self._kept['fft'].update({sid: self.fft_wavelets})
+                        self.cache_num += 1
         ncp = cp if self.cuda else np
         # logger.info('Applying FFT mul.')
         # This 7 lines makes this fast a little.

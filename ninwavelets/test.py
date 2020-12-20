@@ -331,7 +331,7 @@ def speed_test(repeat: int) -> None:
         result_morlet = nin_morlet.power(sin, freqs)
     result_morlet[-1, -1]
     times.append(time() - t)
-    labels.append('Ninwavelets\nCPU No cache')
+    labels.append('Ninwavelets\nCPU No cache normal')
 
     nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=0)
     t = time()
