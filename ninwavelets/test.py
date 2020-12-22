@@ -62,6 +62,7 @@ def test() -> None:
 def test3d() -> None:
     sfreq = 1000
     hz = 20
+    from mne.time_frequency import morlet
     go = morlet(sfreq, [hz])[0]
     mm = morlet(sfreq, [hz], zero_mean=True)[0]
     morse_obj = Morse(sfreq, 17.5, 3)
@@ -114,8 +115,11 @@ def plot_sin_fft() -> None:
 
 
 def cwt_test(cuda: bool = False, show: bool = False, random: bool = False) -> None:
+    cmap = 'rainbow'
     min_freq = 30
-    max_freq = 500
+    max_freq = 100
+    cuda=False
+    random=True
     sin = make_example(1, cuda, random)
     if cuda:
         sin = cp.asarray(sin)
@@ -126,7 +130,7 @@ def cwt_test(cuda: bool = False, show: bool = False, random: bool = False) -> No
     morse = Morse(cuda=cuda, sfreq=1000)
     # morse.mode = CWTMode.Normal
     result_morse = ncp.square(ncp.abs(
-        morse.cwt(cp.array([sin]), cp.arange(min_freq, max_freq, 1))))
+        morse.cwt(ncp.array([sin]), ncp.arange(min_freq, max_freq, 1))))
     print(f'Morse {time() - t}')
 
     log.info('''Change to Normal mode test for GMW only for numpy''')
@@ -135,16 +139,16 @@ def cwt_test(cuda: bool = False, show: bool = False, random: bool = False) -> No
 Normal mode is only for numpy
 Because cupy 7.6.0 has no method named convolve''')
     # nin_morlet = Morlet(cuda=False, sfreq=1000)
-    nin_morlet = Shannon(cuda=False, sfreq=1000)
+    nin_morlet = Morlet(cuda=False, sfreq=1000)
     # nin_morlet.mode = CWTMode.Normal
     t = time()
     result_morlet = np.square(np.abs(
-        nin_morlet.cwt(cp.array([sin]), cp.arange(min_freq, max_freq, 1)/1.5)))
+        nin_morlet.cwt(ncp.array([sin]), ncp.arange(min_freq, max_freq, 1))))
     print(f'Morlet {time() - t}')
     from mne.time_frequency.tfr import morlet, cwt
     if cuda:
         sin = cp.asnumpy(sin)
-        nin_morlet = morlet(1000, cp.arange(min_freq, max_freq, 1), zero_mean=True)[0]
+        mne_morlet = morlet(1000, np.arange(min_freq, max_freq, 1), zero_mean=True)[0]
         # morlet = Morlet(cuda=False)
         # morlet.mode = CWTMode.Fast
     else:
@@ -162,20 +166,37 @@ Because cupy 7.6.0 has no method named convolve''')
         if cuda:
             result_morse = cp.asnumpy(result_morse)
             result_morlet = cp.asnumpy(result_morlet)
-        ax1 = plt.subplot(1, 3, 1)
-        ax2 = plt.subplot(1, 3, 2)
-        ax3 = plt.subplot(1, 3, 3)
+        fig = plt.figure()
+        ax1 = fig.add_subplot(3, 1, 1)
+        ax2 = fig.add_subplot(3, 1, 2)
+        ax3 = fig.add_subplot(3, 1, 3)
         vmin = 0
-        vmax = 10
-        ax1.imshow(cp.asnumpy(cp.abs(result_morse[0])), cmap='RdBu_r', vmin=vmin, vmax=vmax)
-        ax2.imshow(np.abs(cp.asnumpy(result_morlet[0])), cmap='RdBu_r', vmin=vmin, vmax=vmax)
-        ax3.imshow(np.abs(result_mne), cmap='RdBu_r', vmin=vmin, vmax=vmax)
+        vmax = 1
+        im1 = ax1.imshow(np.abs(result_morse[0]), cmap=cmap, vmin=vmin, vmax=vmax)
+        im2 = ax2.imshow(np.abs(result_morlet[0]), cmap=cmap, vmin=vmin, vmax=vmax)
+        im3 = ax3.imshow(np.abs(result_mne), cmap=cmap, vmin=vmin, vmax=vmax)
+
         ax1.invert_yaxis()
         ax2.invert_yaxis()
         ax3.invert_yaxis()
-        ax1.set_title('Morse')
-        ax2.set_title('Morlet')
-        ax3.set_title('MNE')
+        ax1.set_title('A.Ninwavelet Morse (sigma=7.0)')
+        ax2.set_title('B.Ninwavelet Morlet (beta=17.5, gamma=3)')
+        ax3.set_title('C.MNE Morlet (n_cycles=7.0)')
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        ax_cb1 = make_axes_locatable(ax1).new_horizontal(size='2%', pad=0.05)
+        ax_cb2 = make_axes_locatable(ax2).new_horizontal(size='2%', pad=0.05)
+        ax_cb3 = make_axes_locatable(ax3).new_horizontal(size='2%', pad=0.05)
+        fig.add_axes(ax_cb1)
+        fig.add_axes(ax_cb2)
+        fig.add_axes(ax_cb3)
+        plt.tight_layout()
+        plt.colorbar(im1, cax=ax_cb1)
+        plt.colorbar(im2, cax=ax_cb2)
+        plt.colorbar(im3, cax=ax_cb3)
+        ax1.set_aspect('auto')
+        ax2.set_aspect('auto')
+        ax3.set_aspect('auto')
+        fig.savefig('~/Frontiers_LaTex_Templates/img/cwt.jpg')
         plt.show()
     print(f'Morse max if {np.max(np.abs(result_morse))}')
     print(f'Morlet max is {np.max(np.abs(result_morlet))}')
