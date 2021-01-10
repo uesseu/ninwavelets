@@ -5,6 +5,7 @@ from typing import Any, Union, Optional, List
 from multiprocessing import Pool
 import matplotlib.pyplot as plt
 import matplotlib
+from threading import Thread
 
 font_path = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
 font_prop = matplotlib.font_manager.FontProperties(fname=font_path, size=18)
@@ -114,6 +115,33 @@ def plot_sin_fft() -> None:
     plt.show()
 
 
+def precision():
+    min_freq = 20
+    max_freq = 100
+    error = 0
+    max_value = []
+    min_value = []
+    from mne.time_frequency.tfr import morlet, cwt
+    for n in range(100):
+        sin = make_example(1, False, True)
+        mne_morlet = morlet(1000, np.arange(min_freq, max_freq, 1), zero_mean=True)[0]
+        nin_morlet = Morlet(cuda=False, sfreq=1000)
+        result_morlet = np.square(np.abs(
+            nin_morlet.cwt(np.array([sin]), np.arange(min_freq, max_freq, 1))))
+        result_mne = np.abs(cwt(np.array([sin]),
+                         morlet(1000, np.arange(min_freq, max_freq, 1)),
+                         use_fft=True)[0] ** 2)
+        error += np.count_nonzero(np.abs(result_morlet[0][:, 200: 800] /
+                                 result_mne[: , 200: 800] - 1) > 0.001)
+        max_value.append(np.max(np.abs(result_morlet[0][:, 200: 800] /
+                                 result_mne[: , 200: 800] - 1)))
+        min_value.append(np.min(np.abs(result_morlet[0][:, 200: 800] /
+                                 result_mne[: , 200: 800] - 1)))
+    print(error, 80 * 600 * 100)
+    print(error/ (80 * 600 * 100))
+    print(max(max_value))
+    print(min(min_value))
+
 def cwt_test(cuda: bool = False, show: bool = False, random: bool = False) -> None:
     cmap = 'rainbow'
     min_freq = 30
@@ -155,10 +183,27 @@ Because cupy 7.6.0 has no method named convolve''')
         sin = cp.asnumpy(sin)
         # morlet = Morlet(cuda=False)
     t = time()
-    result_mne = cwt(np.array([sin]),
+    result_mne = np.abs(cwt(np.array([sin]),
                      morlet(1000, np.arange(min_freq, max_freq, 1)),
-                     use_fft=True)[0] ** 2
+                     use_fft=True)[0] ** 2)
     print(f'MNE {time() - t}')
+    print('Comparison')
+    # plt.imshow((result_morlet[0] - result_mne),
+    #            vmin=0, vmax=0.0000005, cmap='rainbow')
+
+    # print(np.sqrt((np.square(result_morlet[0][:, 200: 800]
+    #                          - result_mne[:, 200: 800])
+    #       / result_morlet[0][:, 200: 800]).max()))
+
+    # plt.imshow(result_morlet[0][:, 200: 800] /
+    #            result_mne[: , 200: 800],
+    #            cmap='rainbow', vmin = 0.999, vmax=1.001)
+    # plt.imshow(np.abs(np.fft.fft(result_morlet[0][:, 200: 800]) /
+    #                   np.fft.fft(result_mne[: , 200: 800])),
+    #            cmap='rainbow', vmin = 0.9999, vmax=1.0001)
+    print(np.abs(np.fft.fft(result_morlet[0])[:, 200: 800] /
+                 np.fft.fft(result_mne)[:, 200: 800]).max())
+    # plt.show()
 
     if show:
         # plt.plot(nin_morlet.wavelets[15])
@@ -196,7 +241,7 @@ Because cupy 7.6.0 has no method named convolve''')
         ax1.set_aspect('auto')
         ax2.set_aspect('auto')
         ax3.set_aspect('auto')
-        fig.savefig('~/Frontiers_LaTex_Templates/img/cwt.jpg')
+        # fig.savefig('~/Frontiers_LaTex_Templates/img/cwt.jpg')
         plt.show()
     print(f'Morse max if {np.max(np.abs(result_morse))}')
     print(f'Morlet max is {np.max(np.abs(result_morlet))}')
@@ -206,7 +251,7 @@ Because cupy 7.6.0 has no method named convolve''')
     print(f'MNE mean is {np.abs(result_mne).mean()}')
     # result_morse = morse.power(sin, reuse=True)
 
-    plot_tf(cp.asnumpy(result_morse[0]))
+    plot_tf(np.abs(result_morse[0] - result_morlet[0]))
     # plt.show()
 
 
@@ -370,6 +415,19 @@ def speed_test(repeat: int) -> None:
     times.append(time() - t)
     labels.append('Ninwavelets\nCPU')
 
+    nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=1)
+    t = time()
+    for n in range(int(repeat / 5)):
+        ps = [Thread(target=nin_morlet.power,
+                     args=(sin, freqs))
+              for n in range(5)]
+        [p.start() for p in ps]
+        [p.join() for p in ps]
+    # for n in range(repeat):
+    #     result_morlet = nin_morlet.power(sin, freqs)
+    result_morlet[-1, -1]
+    times.append(time() - t)
+    labels.append('Ninwavelets\nMP CPU')
 
     nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=0)
     result_morlet = nin_morlet.power(cp.asarray(sin), c_freqs)
@@ -399,6 +457,7 @@ def speed_test(repeat: int) -> None:
     print(result_morlet[-1, -1])
     times.append(time() - t)
     labels.append('Ninwavelets\nGPU')
+
     #====================
     # SWAN
     #====================
@@ -588,3 +647,5 @@ if __name__ == '__main__':
         plt.show()
     if 'pad' in argv:
         pad()
+    if 'pres' in argv:
+        precision()
