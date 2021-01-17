@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from multiprocessing import Pool
-from typing import Union, List, Iterator, Callable, Tuple, cast, Optional, Dict, Any
+from typing import Union, List, Iterator, Callable, Tuple, cast, Optional, Dict, Any, Sized
 from enum import Enum
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from functools import partial, reduce
@@ -43,7 +43,7 @@ def cp_alloc(array: np.ndarray) -> np.ndarray:
     return buf
 
 
-def np2cp(npdata: np.ndarray, sep: int = 1) -> cp.ndarray:
+def np2cp(npdata: List[np.ndarray]) -> cp.ndarray:
     '''
     A simple loader from numpy to cupy.
     This function loads data ansyncloneously.
@@ -56,11 +56,11 @@ def np2cp(npdata: np.ndarray, sep: int = 1) -> cp.ndarray:
     '''
     copy_npdata = (cp_alloc(npd) for npd in npdata)
     cupy_mem = tuple(cp.ndarray(npd.shape, npd.dtype) for npd in npdata)
-    streams = tuple(cp.cuda.Stream(non_blocking=True) for n in range(sep))
-    tuple(cmem.set(cnpd, streams[n % sep])
-          for cmem, cnpd, n
-          in zip(cupy_mem, copy_npdata, range(len(npdata))))
-    tuple(stream.synchronize() for stream in streams)
+    stream = cp.cuda.Stream(non_blocking=True)
+    tuple(cmem.set(cnpd, stream)
+          for cmem, cnpd
+          in zip(cupy_mem, copy_npdata))
+    stream.synchronize()
     return cupy_mem
 
 
@@ -197,7 +197,7 @@ class WaveletFormula:
     There is some wavelets which has no normal formula.
     And so, it is not written as ABC.
     """
-    def peak_freq(self, freq: float) -> float:
+    def peak_freq(self, freq: float) -> Array:
         return 1.
 
     def formula(self, timeline: Array, freq: Union[Array, float]) -> Array:
@@ -395,7 +395,7 @@ class WaveletGenerator:
         return NORM_CONSTANT * norm(wavelet, axis=axis)
 
 
-    def make_wavelets(self, freqs: Numbers) -> Array:
+    def make_wavelets(self, freqs: Array) -> Array:
         '''
         Make wavelets. It returnes list of wavelet.
 
@@ -682,6 +682,8 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
             ncp = cp if self.cuda else np
             if padding:
                 self.wave_length = factor.factor(wave.shape[-1], 7)
+                if self.wave_length == wave.shape:
+                    padding = False
                 if self.wave is None:
                     self.wave = ncp.zeros(self.wave_length)
                 self.wave[:wave.shape[-1]] = wave[:]
@@ -703,7 +705,8 @@ Converting to numpy is too slow. Exit.''')
         return self._cwt_convolve(wave, freqs, reuse_wavelets, logger)
 
     def power(self, wave: Array, freqs: Array,
-              logger: Logger = logger) -> Array:
+              logger: Logger = logger,
+              padding: bool = False) -> Array:
         '''Perform CWT and calcurate power.
 
         Parameters
@@ -721,10 +724,11 @@ Converting to numpy is too slow. Exit.''')
         '''
         logger.info('Calculating power.')
         ncp = cp if self.cuda else np
-        return ncp.square(self.abs(wave, freqs, logger))
+        return ncp.square(self.abs(wave, freqs, logger, padding))
 
     def abs(self, wave: Array, freqs: Array,
-            logger: Logger = logger) -> Array:
+            logger: Logger = logger,
+            padding: bool = False) -> Array:
         '''Perform CWT and calcurate absolute value.
 
         Parameters
@@ -742,7 +746,7 @@ Converting to numpy is too slow. Exit.''')
         '''
         logger.info('Calculating absolute.')
         ncp = cp if self.cuda else np
-        return ncp.abs(self.cwt(wave, freqs, logger))
+        return ncp.abs(self.cwt(wave, freqs, logger, padding))
 
     def clear_cache(self) -> 'WaveletBase':
         '''

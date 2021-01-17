@@ -6,13 +6,15 @@ from multiprocessing import Pool
 import matplotlib.pyplot as plt
 import matplotlib
 from threading import Thread
+from ninwavelets.factor import factor
 
 font_path = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
 font_prop = matplotlib.font_manager.FontProperties(fname=font_path, size=18)
 matplotlib.rcParams['font.family'] = font_prop.get_name()
 plt.rcParams["font.family"] = "IPAexGothic"
+from concurrent.futures import ThreadPoolExecutor
 from scipy.fftpack import fft, ifft
-from ninwavelets import (Morse, Morlet, CWTMode, np2cp,
+from ninwavelets import (Morse, Morlet, CWTMode, np2cp, cp2np,
                          Haar, plot_tf, MexicanHat, Shannon, Baseline,
                          windows, experimental)
 import gc
@@ -345,19 +347,22 @@ def speed_wavelet_test() -> None:
 def speed_test(repeat: int) -> None:
     length = 2
     repeat_s = repeat
-    freq_range = 30, 100
+    freq_range = 30, 500
     t = time()
     sin = make_example(length, False, False)
     # c_sin = make_example(length, False, False)
     check = False
-    wv = make_example(length, False)
-    wv_mne = np.array([make_example(length, False)])
+    wv = make_example(length, False, False)
+    wv_mne = np.array([make_example(length, False, False)])
     freqs = np.arange(freq_range[0], freq_range[1], 1)
     c_freqs = cp.arange(freq_range[0], freq_range[1], 1)
     times: List[float] = []
     labels: List[str] = []
 
 
+    # Warm up
+    nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=0)
+    result_morlet = nin_morlet.power(cp.asarray(sin), c_freqs)
     #====================
     # Scipy
     #====================
@@ -371,92 +376,99 @@ def speed_test(repeat: int) -> None:
     #====================
     # MNE
     #====================
-    # from mne.time_frequency.tfr import morlet, cwt
-    # labels.append('MNE morlet')
-    # t = time()
-    # mne_morlet = morlet(1000, freqs)
-    # for n in range(repeat_s):
-    #     result_mne = np.square(np.abs(cwt(wv_mne, mne_morlet)[0]))
-    # times.append(time() - t)
+    from mne.time_frequency.tfr import morlet, cwt
+    labels.append('MNE morlet')
+    t = time()
+    mne_morlet = morlet(1000, freqs)
+    for n in range(repeat_s):
+        result_mne = np.square(np.abs(cwt(wv_mne, mne_morlet)))
+    times.append(time() - t)
 
     #====================
     # NinWavelet
     #====================
-    # sp_c_sin = cp.array([sin for n in range(10)])
-    # nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=1)
-    # labels.append('Ninwavelets\nAs multi array')
-    # t = time()
-    # for n in sp_c_sin // 10:
-    #     result_morlet_cuda = nin_morlet.power(sp_c_sin, c_freqs)
-    # result_morlet_cuda[-1, -1, -1]
-    # times.append(time() - t)
-    nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=0)
-    nin_morlet.mode = CWTMode.Normal
+    sp_c_sin = cp.array([sin for n in range(10)])
+    nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=1)
+    labels.append('Ninwavelets\nAs multi array')
     t = time()
-    for n in range(repeat):
-        result_morlet = nin_morlet.power(sin, freqs)
-    result_morlet[-1, -1]
+    for n in sp_c_sin // 10:
+        result_morlet_cuda = nin_morlet.power(sp_c_sin, c_freqs)
+    print(result_morlet_cuda[-1, -1, -1])
     times.append(time() - t)
-    labels.append('Ninwavelets\nCPU No cache normal')
 
-    nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=0)
-    t = time()
-    for n in range(repeat):
-        result_morlet = nin_morlet.power(sin, freqs)
-    result_morlet[-1, -1]
-    times.append(time() - t)
-    labels.append('Ninwavelets\nCPU No cache')
+    # nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=0)
+    # nin_morlet.mode = CWTMode.Normal
+    # t = time()
+    # for n in range(repeat):
+    #     result_morlet = nin_morlet.power(sin, freqs)
+    # print(result_morlet[-1, -1])
+    # times.append(time() - t)
+    # labels.append('Ninwavelets\nCPU No cache normal')
+
+    # nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=0)
+    # t = time()
+    # for n in range(repeat):
+    #     result_morlet = nin_morlet.power(sin, freqs)
+    # print(result_morlet[-1, -1])
+    # times.append(time() - t)
+    # labels.append('Ninwavelets\nCPU No cache')
 
     nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=1)
     t = time()
     for n in range(repeat):
         result_morlet = nin_morlet.power(sin, freqs)
-    result_morlet[-1, -1]
+    print(result_morlet[-1, -1])
     times.append(time() - t)
     labels.append('Ninwavelets\nCPU')
 
     nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=1)
+    def wrap(func, q, *args):
+        q[:] = func(*args)[:]
     t = time()
     for n in range(int(repeat / 5)):
-        ps = [Thread(target=nin_morlet.power,
-                     args=(sin, freqs))
-              for n in range(5)]
+        bufs = [np.empty((freqs.shape[0], sin.shape[0]))]
+
+        ps = [Thread(target=wrap, args=(nin_morlet.power, buf, sin, freqs))
+              for buf in bufs]
         [p.start() for p in ps]
         [p.join() for p in ps]
     # for n in range(repeat):
     #     result_morlet = nin_morlet.power(sin, freqs)
-    result_morlet[-1, -1]
+    print(bufs[0][-1, -1])
     times.append(time() - t)
-    labels.append('Ninwavelets\nMP CPU')
-
-    nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=0)
-    result_morlet = nin_morlet.power(cp.asarray(sin), c_freqs)
-
-    nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=0)
-    nin_morlet.mode = CWTMode.Normal
-    t = time()
-    for n in range(repeat):
-        result_morlet = nin_morlet.power(cp.asarray(sin), c_freqs)
-    print(result_morlet[-1, -1])
-    times.append(time() - t)
-    labels.append('Ninwavelets\nNormal')
+    labels.append('Ninwavelets\nMulti-core CPU')
 
 
-    nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=0)
-    t = time()
-    for n in range(repeat):
-        result_morlet = nin_morlet.power(cp.asarray(sin), c_freqs)
-    print(result_morlet[-1, -1])
-    times.append(time() - t)
-    labels.append('Ninwavelets\nFrom Fourier')
+    # nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=0)
+    # nin_morlet.mode = CWTMode.Normal
+    # t = time()
+    # for n in range(repeat):
+    #     result_morlet = nin_morlet.power(cp.asarray(sin), c_freqs)
+    # print(cp2np([result_morlet[-1, -1]], np.float))
+    # times.append(time() - t)
+    # labels.append('Ninwavelets\nNormal')
+
+
+    # nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=0)
+    # t = time()
+    # for n in range(repeat):
+    #     result_morlet = nin_morlet.power(cp.asarray(sin), c_freqs)
+    # print(cp2np([result_morlet[-1, -1]], np.float))
+    # times.append(time() - t)
+    # labels.append('Ninwavelets\nFrom Fourier')
 
     t = time()
     nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=1)
-    for n in range(repeat):
-        result_morlet = nin_morlet.power(cp.asarray(sin), c_freqs)
-    print(result_morlet[-1, -1])
+    # for n in range(repeat):
+    result_morlet = (nin_morlet.power(cp.asarray(sin), c_freqs) for n in range(repeat))
+    # result = result_morlet.get()
+    result = cp2np(result_morlet, np.float)[0]
+    # print(result_mne.shape)
+    # print(result_morlet[0, 0].get().shape)
     times.append(time() - t)
     labels.append('Ninwavelets\nGPU')
+    print(times)
+    print(labels)
 
     #====================
     # SWAN
@@ -495,49 +507,57 @@ def tune(wave: Array) -> None:
 
 def tune_cuda(wave: Array, repeat: Optional[int] = None) -> None:
     ncp = cp if cuda else np
-    gabor = True
+    gabor = False
     morlet = Morlet(sfreq=2048, real_wave_length=2,
                     cuda=False, cache_limit=0, gabor=gabor)
     morlet_cp = Morlet(sfreq=2048, real_wave_length=2,
                        cuda=True, cache_limit=0, gabor=gabor)
     repeat = 100 if repeat is None else repeat
-    t = time()
     freq = np.arange(1, 100, 1)
     freq_cp = cp.arange(1, 100, 1)
 
     morlet.cache_limit = 0
+    t = time()
     for n in range(repeat):
         result = morlet.make_fft_wavelets(freq)
         i= result[0, 0]
-    print((time() - t)/repeat)
+    print('Morlet', (time() - t))
     
     morlet.mode=CWTMode.Normal
     t = time()
     for n in range(repeat):
         result = morlet.make_fft_wavelets(freq)
         i= result[0, 0]
-    print((time() - t)/repeat)
+    print('Morlet Normal', (time() - t))
 
     t = time()
     for n in range(repeat):
         result = morlet_cp.make_fft_wavelets(freq_cp)
         i= result[0, 0]
-    print((time() - t)/repeat)
+    print('Morlet GPU', (time() - t))
 
     morlet.mode=CWTMode.Normal
     t = time()
     for n in range(repeat):
         result = morlet_cp.make_fft_wavelets(freq_cp)
         i= result[0, 0]
-    print((time() - t)/repeat)
+    print('Morlet Normal GPU', (time() - t))
 
-    t = time()
     morse = Morse(sfreq=2048, real_wave_length=2,
-                   cuda=True, cache_limit=0)
+                  cuda=False, cache_limit=0)
+    t = time()
+    for n in range(repeat):
+        result = morse.make_fft_wavelets(freq)
+        i= result[0, 0]
+    print('Morse', (time() - t))
+
+    morse = Morse(sfreq=2048, real_wave_length=2,
+                  cuda=True, cache_limit=0)
+    t = time()
     for n in range(repeat):
         result = morse.make_fft_wavelets(freq_cp)
         i= result[0, 0]
-    print((time() - t)/repeat)
+    print('Morse GPU', (time() - t))
 
 def tune_2d(wave: Array) -> None:
     morse = Morse(cuda=True)
@@ -551,8 +571,6 @@ def test_2d() -> None:
     morse.cwt(wv[0], freqs)
 
 def pad() -> None:
-    import factor
-    print(factor.factor(1001, 7))
     morlet = Morlet(1000)
     wv = make_example(1.0015, cuda=True)
     freqs = cp.arange(30, 500, 1)
@@ -618,7 +636,7 @@ if __name__ == '__main__':
         sp_cp_wave = cp.array([cp_wave for n in range(500)])
         freqs = np.geomspace(1, 10, 1000)
         # tune(wave)
-        tune_cuda(cp_wave, 10)
+        tune_cuda(cp_wave, int(argv[2]))
         # tune_2d(sp_cp_wave)
     if 'wavelet_speed' in argv:
         speed_wavelet_test()
@@ -649,3 +667,12 @@ if __name__ == '__main__':
         pad()
     if 'pres' in argv:
         precision()
+
+    t = time()
+    i = cp2np([cp.arange(3, 19) for n in range(4000)], np.int)
+    print(i[0])
+    print(time() - t)
+    t = time()
+    i = [cp.arange(3, 19) for n in range(4000)]
+    print(i[0])
+    print(time() - t)

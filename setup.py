@@ -3,12 +3,12 @@ from Cython.Build import cythonize
 
 setup(
     name='ninwavelets',
-    version='0.2.0',
+    version='0.3.0',
     install_requires=['scipy', 'numpy', 'cython'],
     package_dir={'ninwavelets': 'ninwavelets'},
     packages=find_packages(),
-    description='Very fast wavelet transform package',
-    long_description='''Brand new analystic wavelets package, based on numpy and cupy.
+    description='Very fast continuous wavelet transform package',
+    long_description='''Brand new Continuous Wavelet Transform package, based on numpy and cupy.
 It may be extremely fast.
 It can perform various wavelets(Morlet, GMW).''',
     url='https://github.com/uesseu/ninwavelets',
