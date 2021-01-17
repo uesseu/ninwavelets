@@ -490,11 +490,11 @@ class WaveletConvolver(WaveletsContainer):
                      reuse_wavelets: bool, logger: Logger = logger) -> Array:
         '''
         Backend of cwt in convolve mode. This is not optimized yet.
-        Some obsessive people hates DFT and this method may be needed.
-        Ofcource, I understand their opinions, but seems to be too obsessive.
-        Some of them cannot permit DFT because of zero padding.
-        FFT of numpy does not perform zeropadding, I think.
-        Either way, because it is hobby for me, it does not take priority.
+        This method is slow, but there are people who say
+        'DFT is not Fourier transform' and this method is for such people.
+        The purpose of this package is fast calculation.
+        It is not fun for me to develop this section.
+        Because it is hobby for me, it does not take priority.
 
         Parameters
         ----------
