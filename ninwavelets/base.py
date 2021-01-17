@@ -35,13 +35,12 @@ Floats = Optional[Tuple[float, float]]
 NORM_CONSTANT: float = np.sqrt(0.5)
 
 
+
 def cp_alloc(array: np.ndarray) -> np.ndarray:
     buf: np.ndarray = np.frombuffer(cp.cuda.alloc_pinned_memory(array.nbytes),
                                     array.dtype,
                                     array.size).reshape(array.shape)
-    buf[...] = array
     return buf
-
 
 def np2cp(npdata: List[np.ndarray]) -> cp.ndarray:
     '''
@@ -652,7 +651,7 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
         return wave, freqs
 
     def cwt(self, wave: Array, freqs: Union[Numbers, None],
-            logger: Logger = logger, padding: bool = False,
+            logger: Logger = logger, padding: bool = True,
             ) -> Array:
         '''Perform CWT
 
@@ -685,8 +684,8 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
                 if self.wave_length == wave.shape:
                     padding = False
                 if self.wave is None:
-                    self.wave = ncp.zeros(self.wave_length)
-                self.wave[:wave.shape[-1]] = wave[:]
+                    self.wave = ncp.zeros(wave.shape[:-1]+ (self.wave_length,))
+                self.wave[...,:wave.shape[-1]] = wave[:]
                 wave = self.wave
             # wave = ncp.pad(wave, (0, self.wave_length - wave.shape[-1]))
             result = self._cwt_fft(wave, freqs, reuse_wavelets, logger, padding)
@@ -706,7 +705,7 @@ Converting to numpy is too slow. Exit.''')
 
     def power(self, wave: Array, freqs: Array,
               logger: Logger = logger,
-              padding: bool = False) -> Array:
+              padding: bool = True) -> Array:
         '''Perform CWT and calcurate power.
 
         Parameters
@@ -728,7 +727,7 @@ Converting to numpy is too slow. Exit.''')
 
     def abs(self, wave: Array, freqs: Array,
             logger: Logger = logger,
-            padding: bool = False) -> Array:
+            padding: bool = True) -> Array:
         '''Perform CWT and calcurate absolute value.
 
         Parameters

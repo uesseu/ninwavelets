@@ -14,7 +14,7 @@ matplotlib.rcParams['font.family'] = font_prop.get_name()
 plt.rcParams["font.family"] = "IPAexGothic"
 from concurrent.futures import ThreadPoolExecutor
 from scipy.fftpack import fft, ifft
-from ninwavelets import (Morse, Morlet, CWTMode, np2cp, cp2np,
+from ninwavelets import (Morse, Morlet, CWTMode, np2cp,
                          Haar, plot_tf, MexicanHat, Shannon, Baseline,
                          windows, experimental)
 import gc
@@ -117,7 +117,7 @@ def plot_sin_fft() -> None:
     plt.show()
 
 
-def precision():
+def precision() -> None:
     min_freq = 20
     max_freq = 100
     error = 0
@@ -460,12 +460,14 @@ def speed_test(repeat: int) -> None:
     t = time()
     nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=1)
     # for n in range(repeat):
-    result_morlet = (nin_morlet.power(cp.asarray(sin), c_freqs) for n in range(repeat))
+    result_morlet = [cp.asnumpy(nin_morlet.power(cp.asarray(sin), c_freqs)) for n in range(repeat)]
     # result = result_morlet.get()
-    result = cp2np(result_morlet, np.float)[0]
+    # result = list(cp2np(result_morlet, np.float))[0]
+    times.append(time() - t)
+    plt.imshow(result_morlet[0])
+    plt.show()
     # print(result_mne.shape)
     # print(result_morlet[0, 0].get().shape)
-    times.append(time() - t)
     labels.append('Ninwavelets\nGPU')
     print(times)
     print(labels)
@@ -669,10 +671,10 @@ if __name__ == '__main__':
         precision()
 
     t = time()
-    i = cp2np([cp.arange(3, 19) for n in range(4000)], np.int)
-    print(i[0])
-    print(time() - t)
-    t = time()
-    i = [cp.arange(3, 19) for n in range(4000)]
-    print(i[0])
-    print(time() - t)
+    # i = cp2np([cp.arange(3, 19) for n in range(4000)])
+    # print(i[0])
+    # print(time() - t)
+    # t = time()
+    # i = [cp.arange(3, 19) for n in range(4000)]
+    # print(i[0])
+    # print(time() - t)
