@@ -681,15 +681,15 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
             ncp = cp if self.cuda else np
             if padding:
                 self.wave_length = factor.factor(wave.shape[-1], 7)
-                if self.wave_length == wave.shape:
-                    padding = False
-                if self.wave is None:
-                    self.wave = ncp.zeros(wave.shape[:-1]+ (self.wave_length,))
+                padding = False if self.wave_length == wave.shape else True
+                if self.wave is None or padding:
+                    self.wave = ncp.zeros(wave.shape[:-1]
+                                          + (self.wave_length,))
                 self.wave[...,:wave.shape[-1]] = wave[:]
                 wave = self.wave
             # wave = ncp.pad(wave, (0, self.wave_length - wave.shape[-1]))
             result = self._cwt_fft(wave, freqs, reuse_wavelets, logger, padding)
-            return result[:, :original_wave_length] if padding else result
+            return result[..., :original_wave_length] if padding else result
         if self.cuda:
             logger.warn('''
 Cuda is disabled, because cupy cannot convolve in this version.
