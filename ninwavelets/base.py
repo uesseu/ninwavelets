@@ -619,7 +619,7 @@ class WaveletMultiplier(WaveletsContainer):
             else:
                 self.make_fft_wavelets(freqs, wave.shape[0] / self.sfreq)
                 if ((self.cache_limit is None) or
-                    self.cache_limit > len(self._kept_fft)):
+                        self.cache_limit > len(self._kept_fft)):
                     self._kept_fft.update({sid: self.fft_wavelets})
         ncp = cp if self.cuda else np
         logger.info('Applying FFT mul.')
@@ -629,6 +629,7 @@ class WaveletMultiplier(WaveletsContainer):
         #         self._ifft_plan = cx_fft.get_fft_plan(wave, axes=(1,))
         #     return cx_fft.ifft(wave, plan=self._ifft_plan)
         return ncp.fft.ifft(self.fft_wavelets * wave)
+
 
 class WaveletBase(WaveletConvolver, WaveletMultiplier):
     '''
@@ -685,10 +686,11 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
                 if self.wave is None or padding:
                     self.wave = ncp.zeros(wave.shape[:-1]
                                           + (self.wave_length,))
-                self.wave[...,:wave.shape[-1]] = wave[:]
+                self.wave[..., :wave.shape[-1]] = wave[:]
                 wave = self.wave
             # wave = ncp.pad(wave, (0, self.wave_length - wave.shape[-1]))
-            result = self._cwt_fft(wave, freqs, reuse_wavelets, logger, padding)
+            result = self._cwt_fft(
+                wave, freqs, reuse_wavelets, logger, padding)
             return result[..., :original_wave_length] if padding else result
         if self.cuda:
             logger.warn('''

@@ -18,5 +18,3 @@ It can perform various wavelets(Morlet, GMW).''',
     ext_modules=cythonize("ninwavelets/factor.pyx"),
     zip_safe=False,
 )
-
-

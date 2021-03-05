@@ -25,8 +25,8 @@ from functools import partial
 from scipy import signal
 from contextlib import redirect_stdout
 import os
-import seaborn as sns
-sns.set(font_scale=2)
+# import seaborn as sns
+# sns.set(font_scale=2)
 
 basicConfig(level=WARNING)
 log = getLogger()
@@ -148,8 +148,8 @@ def cwt_test(cuda: bool = False, show: bool = False, random: bool = False) -> No
     cmap = 'rainbow'
     min_freq = 30
     max_freq = 100
-    cuda=False
-    random=True
+    cuda = False
+    random = True
     sin = make_example(1, cuda, random)
     if cuda:
         sin = cp.asarray(sin)
@@ -186,8 +186,8 @@ Because cupy 7.6.0 has no method named convolve''')
         # morlet = Morlet(cuda=False)
     t = time()
     result_mne = np.abs(cwt(np.array([sin]),
-                     morlet(1000, np.arange(min_freq, max_freq, 1)),
-                     use_fft=True)[0] ** 2)
+                            morlet(1000, np.arange(min_freq, max_freq, 1)),
+                            use_fft=True)[0] ** 2)
     print(f'MNE {time() - t}')
     print('Comparison')
     # plt.imshow((result_morlet[0] - result_mne),
@@ -205,45 +205,43 @@ Because cupy 7.6.0 has no method named convolve''')
     #            cmap='rainbow', vmin = 0.9999, vmax=1.0001)
     print(np.abs(np.fft.fft(result_morlet[0])[:, 200: 800] /
                  np.fft.fft(result_mne)[:, 200: 800]).max())
+    print(result_morse.shape)
     # plt.show()
 
     if show:
         # plt.plot(nin_morlet.wavelets[15])
         plt.show()
+        import seaborn as sns
+        sns.set(font_scale=2)
         if cuda:
             result_morse = cp.asnumpy(result_morse)
             result_morlet = cp.asnumpy(result_morlet)
-        fig = plt.figure()
-        ax1 = fig.add_subplot(3, 1, 1)
-        ax2 = fig.add_subplot(3, 1, 2)
-        ax3 = fig.add_subplot(3, 1, 3)
+        fig = plt.figure(figsize=(18, 16))
+        axes = [fig.add_subplot(3, 1, n+1) for n in range(3)]
         vmin = 0
         vmax = 1
-        im1 = ax1.imshow(np.abs(result_morse[0]), cmap=cmap, vmin=vmin, vmax=vmax)
-        im2 = ax2.imshow(np.abs(result_morlet[0]), cmap=cmap, vmin=vmin, vmax=vmax)
-        im3 = ax3.imshow(np.abs(result_mne), cmap=cmap, vmin=vmin, vmax=vmax)
-
-        ax1.invert_yaxis()
-        ax2.invert_yaxis()
-        ax3.invert_yaxis()
-        ax1.set_title('A.Ninwavelet Morse (sigma=7.0)')
-        ax2.set_title('B.Ninwavelet Morlet (beta=17.5, gamma=3)')
-        ax3.set_title('C.MNE Morlet (n_cycles=7.0)')
+        ims = []
+        ims.append(axes[0].imshow(np.abs(result_morse[0]), cmap=cmap, vmin=vmin, vmax=vmax))
+        ims.append(axes[1].imshow(np.abs(result_morlet[0]), cmap=cmap, vmin=vmin, vmax=vmax))
+        ims.append(axes[2].imshow(np.abs(result_mne), cmap=cmap, vmin=vmin, vmax=vmax))
+        [ax.invert_yaxis() for ax in axes]
+        axes[0].set_title('A.Ninwavelet Morse (sigma=7.0)')
+        axes[1].set_title('B.Ninwavelet Morlet (beta=17.5, gamma=3)')
+        axes[2].set_title('C.MNE Morlet (n_cycles=7.0)')
         from mpl_toolkits.axes_grid1 import make_axes_locatable
-        ax_cb1 = make_axes_locatable(ax1).new_horizontal(size='2%', pad=0.05)
-        ax_cb2 = make_axes_locatable(ax2).new_horizontal(size='2%', pad=0.05)
-        ax_cb3 = make_axes_locatable(ax3).new_horizontal(size='2%', pad=0.05)
-        fig.add_axes(ax_cb1)
-        fig.add_axes(ax_cb2)
-        fig.add_axes(ax_cb3)
+        axcbs = [make_axes_locatable(ax).new_horizontal(size='2%', pad=0.05) for ax in axes]
+        [fig.add_axes(ac) for ac in axcbs]
+        [ax.set_ylabel('Frequency (Hz)', fontsize=24) for ax in axes]
+        [ax.set_xlabel('Time (Second)', fontsize=24) for ax in axes]
+        [plt.colorbar(im, cax=cb) for im, cb in zip(ims, axcbs)]
+        [ax.set_aspect('auto') for ax in axes]
+        [ax.set_yticks(np.arange(0, 70, 20)) for ax in axes]
+        [ax.set_yticklabels(np.arange(30, 100, 20), fontsize=24) for ax in axes]
+        [ax.set_xticks(np.arange(0, 1000, 200)) for ax in axes]
+        [ax.set_xticklabels(np.arange(0, 1000, 200), fontsize=24) for ax in axes]
         plt.tight_layout()
-        plt.colorbar(im1, cax=ax_cb1)
-        plt.colorbar(im2, cax=ax_cb2)
-        plt.colorbar(im3, cax=ax_cb3)
-        ax1.set_aspect('auto')
-        ax2.set_aspect('auto')
-        ax3.set_aspect('auto')
-        # fig.savefig('~/Frontiers_LaTex_Templates/img/cwt.jpg')
+        # plt.subplots_adjust(wspace=0.4, hspace=0.5)
+        fig.savefig('/home/ninja/Frontiers_LaTex_Templates/imgs/cwt.jpg')
         plt.show()
     print(f'Morse max if {np.max(np.abs(result_morse))}')
     print(f'Morlet max is {np.max(np.abs(result_morlet))}')
@@ -252,7 +250,6 @@ Because cupy 7.6.0 has no method named convolve''')
     print(f'Morlet mean is {np.abs(result_morlet).mean()}')
     print(f'MNE mean is {np.abs(result_mne).mean()}')
     # result_morse = morse.power(sin, reuse=True)
-
     plot_tf(np.abs(result_morse[0] - result_morlet[0]))
     # plt.show()
 
@@ -323,8 +320,8 @@ def eeg(cuda: bool) -> None:
     d = data[150*500: 190*500]
     d = Baseline(d, 1000, 0, 1).zscore()
     tf = Morse(raw.info['sfreq'], cuda=True).power(d, np.arange(0.1, 50, 0.1))
-    ax = plot_tf(tf, frange=(0, 50, 10), trange=(0, 40, 10), sfreq=500,
-                 show=False)
+    ax = plot_tf(tf, frange=(0, 50, 10),
+                 trange=(0, 40, 10), sfreq=500, show=False)
     ax.set_title('My EEG power(O1)')
     ax.set_xlabel('Time Course(sec)')
     ax.set_ylabel('Hz')
