@@ -1,12 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from multiprocessing import Pool
-from typing import Union, List, Iterator, Callable, Tuple, cast, Optional, Dict, Any, Sized
+from typing import Union, List, Iterator, Callable, Tuple, cast, Optional
 from enum import Enum
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from functools import partial, reduce
+from functools import reduce
 from operator import mul
-from logging import getLogger, INFO, basicConfig, NullHandler, Logger
+from logging import getLogger, NullHandler, Logger
 import pyximport
 pyximport.install()
 from . import factor
