@@ -14,7 +14,7 @@ class MorseFormula(WaveletFormula):
         self.r: float = r
         self.b: float = b
         self.alpha = 2 * np.power((np.e * self.r / self.b), self.b / self.r)
-        self.peak = np.power(self.b/self.r,1/self.r)
+        self.peak = np.power(self.b/self.r, 1/self.r)
 
     def cp_trans_formula(self, freqs: cp.ndarray,
                          freq: float = 1.) -> cp.ndarray:
@@ -23,7 +23,8 @@ class MorseFormula(WaveletFormula):
         # Using negative side makes it slow.
         freqs /= freq
         freqs *= self.peak
-        return self.alpha*cp.power(freqs, self.b)*cp.exp(-cp.power(freqs, self.r))
+        return self.alpha*cp.power(freqs, self.b)*cp.exp(
+            -cp.power(freqs, self.r))
 
     def trans_formula(self, freqs: np.ndarray, freq: float = 1.) -> np.ndarray:
         # Indeed, step function is needed.
@@ -31,6 +32,7 @@ class MorseFormula(WaveletFormula):
         # Using negative side makes it slow.
         freqs = freqs / freq * self.peak
         return self.alpha*np.power(freqs, self.b)*np.exp(-np.power(freqs, self.r))
+
 
 class Morse(WaveletBase):
     '''
@@ -73,6 +75,7 @@ class Morse(WaveletBase):
     -------
     As constructor, Morse instance its self.
     '''
+
     def __init__(self, sfreq: float = 1000, b: float = 17.5, r: float = 3,
                  real_wave_length: float = 1., cuda: bool = False,
                  cache_limit: Optional[int] = 10) -> None:
@@ -177,6 +180,7 @@ class Morlet(WaveletBase):
         self.formula = MorletFormula(sigma, gabor)
         self.mode = CWTMode.Fast
 
+
 class MexicanHatFormula(WaveletFormula):
     def __init__(self, sigma: float) -> None:
         self.sigma = sigma
@@ -191,6 +195,7 @@ class MexicanHatFormula(WaveletFormula):
 
     def peak_freq(self, freq: float) -> float:
         return cast(float, np.sqrt(6.) / (np.pi ** 2))
+
 
 class MexicanHat(WaveletBase):
     '''
@@ -234,6 +239,7 @@ class ShannonFormula(WaveletFormula):
     def cp_trans_formula(self, tc: cp.ndarray, freq: float = 1) -> cp.ndarray:
         return cp.where(cp.abs(tc/freq - 1.5) <= 0.5, 1., 0)
 
+
 class Shannon(WaveletBase):
     '''
     Shannon Wavelets.
@@ -256,7 +262,7 @@ class Shannon(WaveletBase):
     As constructor, Shannon instance its self.
     '''
 
-    def __init__(self, sfreq: float = 1000, 
+    def __init__(self, sfreq: float = 1000,
                  real_wave_length: float = 1., cuda: bool = False,
                  cache_limit: Optional[int] = 10) -> None:
         super(Shannon, self).__init__(sfreq, real_wave_length, cuda,
@@ -271,6 +277,7 @@ class HaarFormula(WaveletFormula):
         timeline = np.where(timeline > 0., 1, timeline)
         timeline = np.where(timeline < 0., -1, timeline)
         return timeline - np.flip(timeline)
+
 
 class Haar(WaveletBase):
     '''
@@ -295,6 +302,7 @@ class Haar(WaveletBase):
     -------
     As constructor, Shannon instance its self.
     '''
+
     def __init__(self, sfreq: float = 1000,
                  real_wave_length: float = 1., cuda: bool = False,
                  cache_limit: Optional[int] = 10) -> None:

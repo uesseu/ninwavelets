@@ -1,30 +1,23 @@
 import numpy as np
 import cupy as cp
-from mpl_toolkits.mplot3d import Axes3D
-from typing import Any, Union, Optional, List
+from typing import Union, Optional, List
 from multiprocessing import Pool
+from threading import Thread
+
+from scipy.fftpack import fft, ifft
+from ninwavelets import (Morse, Morlet, CWTMode, np2cp,
+                         plot_tf, MexicanHat, Shannon, Baseline,
+                         windows)
+from time import time
+from sys import argv
+from logging import getLogger, INFO, WARNING, basicConfig, ERROR, CRITICAL
+from functools import partial
 import matplotlib.pyplot as plt
 import matplotlib
-from threading import Thread
-from ninwavelets.factor import factor
-
 font_path = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
 font_prop = matplotlib.font_manager.FontProperties(fname=font_path, size=18)
 matplotlib.rcParams['font.family'] = font_prop.get_name()
 plt.rcParams["font.family"] = "IPAexGothic"
-from concurrent.futures import ThreadPoolExecutor
-from scipy.fftpack import fft, ifft
-from ninwavelets import (Morse, Morlet, CWTMode, np2cp,
-                         Haar, plot_tf, MexicanHat, Shannon, Baseline,
-                         windows, experimental)
-import gc
-from time import time, sleep
-from sys import argv
-from logging import getLogger, INFO, WARNING, basicConfig, ERROR, CRITICAL
-from functools import partial
-from scipy import signal
-from contextlib import redirect_stdout
-import os
 # import seaborn as sns
 # sns.set(font_scale=2)
 
@@ -33,19 +26,19 @@ log = getLogger()
 Array = Union[np.ndarray, cp.ndarray]
 
 
-def make_example(length: float = 3, cuda: bool = True, random: bool = True) -> np.ndarray:
+def make_example(length: float = 3, cuda: bool = True,
+                 random: bool = True) -> np.ndarray:
     freq: float = 60
     ncp = cp if cuda else np
     time: Array = ncp.arange(0, length, 0.001)
     if random:
         return ncp.random.random(int(length * 1000))
     sin = ncp.array(ncp.sin(time * freq * 2 * ncp.pi) +
-                   ncp.sin(time * 160 * 2 * ncp.pi) * ncp.sin(time * ncp.pi) +
-                   ncp.sin(ncp.pad(ncp.arange(0, length / 2, 0.001),
-                                 [int(length * 250), int(length * 250)],
-                                 'constant') *
-                          300 * 2 * ncp.pi)
-                   )
+                    ncp.sin(time * 160 * 2 * ncp.pi) * ncp.sin(time * ncp.pi) +
+                    ncp.sin(ncp.pad(ncp.arange(0, length / 2, 0.001),
+                                    [int(length * 250), int(length * 250)],
+                                    'constant') * 300 * 2 * ncp.pi)
+                    )
     # result = [ncp.copy(sin) for n in range(1000)]
     return sin
 
@@ -90,7 +83,6 @@ def test3d() -> None:
     ax.plot(morlet_time, mm, label='MNE Morlet')
     ax.plot(morlet_time, mm.imag, label='MNE Morlet imag')
     ax.plot(morlet_time, go, label='Gabor Wavelet')
-    ax.plot(Haar(1000).make_wavelets([hz])[0], label='Haar Wavelet')
 
     ax1 = fig.add_subplot(212, projection='3d')
     ax1.scatter3D(morse.real, morse_time, morse.imag, label='morse')
@@ -126,25 +118,28 @@ def precision() -> None:
     from mne.time_frequency.tfr import morlet, cwt
     for n in range(100):
         sin = make_example(1, False, True)
-        mne_morlet = morlet(1000, np.arange(min_freq, max_freq, 1), zero_mean=True)[0]
+        mne_morlet = morlet(1000, np.arange(
+            min_freq, max_freq, 1), zero_mean=True)[0]
         nin_morlet = Morlet(cuda=False, sfreq=1000)
         result_morlet = np.square(np.abs(
             nin_morlet.cwt(np.array([sin]), np.arange(min_freq, max_freq, 1))))
         result_mne = np.abs(cwt(np.array([sin]),
-                         morlet(1000, np.arange(min_freq, max_freq, 1)),
-                         use_fft=True)[0] ** 2)
+                                morlet(1000, np.arange(min_freq, max_freq, 1)),
+                                use_fft=True)[0] ** 2)
         error += np.count_nonzero(np.abs(result_morlet[0][:, 200: 800] /
-                                 result_mne[: , 200: 800] - 1) > 0.001)
+                                         result_mne[:, 200: 800] - 1) > 0.001)
         max_value.append(np.max(np.abs(result_morlet[0][:, 200: 800] /
-                                 result_mne[: , 200: 800] - 1)))
+                                       result_mne[:, 200: 800] - 1)))
         min_value.append(np.min(np.abs(result_morlet[0][:, 200: 800] /
-                                 result_mne[: , 200: 800] - 1)))
+                                       result_mne[:, 200: 800] - 1)))
     print(error, 80 * 600 * 100)
-    print(error/ (80 * 600 * 100))
+    print(error / (80 * 600 * 100))
     print(max(max_value))
     print(min(min_value))
 
-def cwt_test(cuda: bool = False, show: bool = False, random: bool = False) -> None:
+
+def cwt_test(cuda: bool = False, show: bool = False,
+             random: bool = False) -> None:
     cmap = 'rainbow'
     min_freq = 30
     max_freq = 100
@@ -178,7 +173,8 @@ Because cupy 7.6.0 has no method named convolve''')
     from mne.time_frequency.tfr import morlet, cwt
     if cuda:
         sin = cp.asnumpy(sin)
-        mne_morlet = morlet(1000, np.arange(min_freq, max_freq, 1), zero_mean=True)[0]
+        mne_morlet = morlet(1000, np.arange(
+            min_freq, max_freq, 1), zero_mean=True)[0]
         # morlet = Morlet(cuda=False)
         # morlet.mode = CWTMode.Fast
     else:
@@ -221,24 +217,30 @@ Because cupy 7.6.0 has no method named convolve''')
         vmin = 0
         vmax = 1
         ims = []
-        ims.append(axes[0].imshow(np.abs(result_morse[0]), cmap=cmap, vmin=vmin, vmax=vmax))
-        ims.append(axes[1].imshow(np.abs(result_morlet[0]), cmap=cmap, vmin=vmin, vmax=vmax))
-        ims.append(axes[2].imshow(np.abs(result_mne), cmap=cmap, vmin=vmin, vmax=vmax))
+        ims.append(axes[0].imshow(np.abs(result_morse[0]), cmap=cmap,
+                                  vmin=vmin, vmax=vmax))
+        ims.append(axes[1].imshow(np.abs(result_morlet[0]), cmap=cmap,
+                                  vmin=vmin, vmax=vmax))
+        ims.append(axes[2].imshow(np.abs(result_mne), cmap=cmap,
+                                  vmin=vmin, vmax=vmax))
         [ax.invert_yaxis() for ax in axes]
         axes[0].set_title('A.Ninwavelet Morse (sigma=7.0)')
         axes[1].set_title('B.Ninwavelet Morlet (beta=17.5, gamma=3)')
         axes[2].set_title('C.MNE Morlet (n_cycles=7.0)')
         from mpl_toolkits.axes_grid1 import make_axes_locatable
-        axcbs = [make_axes_locatable(ax).new_horizontal(size='2%', pad=0.05) for ax in axes]
+        axcbs = [make_axes_locatable(ax).new_horizontal(size='2%', pad=0.05)
+                 for ax in axes]
         [fig.add_axes(ac) for ac in axcbs]
         [ax.set_ylabel('Frequency (Hz)', fontsize=24) for ax in axes]
         [ax.set_xlabel('Time (Second)', fontsize=24) for ax in axes]
         [plt.colorbar(im, cax=cb) for im, cb in zip(ims, axcbs)]
         [ax.set_aspect('auto') for ax in axes]
         [ax.set_yticks(np.arange(0, 70, 20)) for ax in axes]
-        [ax.set_yticklabels(np.arange(30, 100, 20), fontsize=24) for ax in axes]
+        [ax.set_yticklabels(np.arange(30, 100, 20), fontsize=24)
+         for ax in axes]
         [ax.set_xticks(np.arange(0, 1000, 200)) for ax in axes]
-        [ax.set_xticklabels(np.arange(0, 1000, 200), fontsize=24) for ax in axes]
+        [ax.set_xticklabels(np.arange(0, 1000, 200), fontsize=24)
+         for ax in axes]
         plt.tight_layout()
         # plt.subplots_adjust(wspace=0.4, hspace=0.5)
         fig.savefig('/home/ninja/Frontiers_LaTex_Templates/imgs/cwt.jpg')
@@ -301,7 +303,8 @@ def fft_wavelet_test() -> None:
     ax.plot(np.abs(c.real), label='FFTed Morlet wavelet')
     ax.plot(np.abs(fft(d)), label='MNE morlet')
     ax.plot(c.imag, label='imag of FFTed Morlet wavelet')
-    ax.plot(normal_morlet.make_wavelets([hz])[0], label='Morlet Wavelet Normal Mode')
+    ax.plot(normal_morlet.make_wavelets([hz])[
+            0], label='Morlet Wavelet Normal Mode')
     handler, label = ax.get_legend_handles_labels()
     ax.legend(label, loc='upper right')
     plt.show()
@@ -327,6 +330,7 @@ def eeg(cuda: bool) -> None:
     ax.set_ylabel('Hz')
     plt.show()
 
+
 def speed_wavelet_test() -> None:
     from mne.time_frequency.tfr import morlet, cwt
     freq_range = 30, 500
@@ -338,8 +342,9 @@ def speed_wavelet_test() -> None:
 
     t = time()
     for n in range(10):
-        nin_morlet = Morlet(1000,gabor=True).make_fft_wavelets(freqs)
+        nin_morlet = Morlet(1000, gabor=True).make_fft_wavelets(freqs)
     print('Nin wavelet generation: ', time() - t)
+
 
 def speed_test(repeat: int) -> None:
     length = 2
@@ -356,13 +361,12 @@ def speed_test(repeat: int) -> None:
     times: List[float] = []
     labels: List[str] = []
 
-
     # Warm up
     nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=0)
     result_morlet = nin_morlet.power(cp.asarray(sin), c_freqs)
-    #====================
+    # ====================
     # Scipy
-    #====================
+    # ====================
     # from scipy import signal
     # labels.append('Scipy morlet')
     # t = time()
@@ -370,9 +374,9 @@ def speed_test(repeat: int) -> None:
     #     result_sci = np.abs(signal.cwt(wv, signal.morlet2, freqs)) ** 2
     # times.append(time() - t)
 
-    #====================
+    # ====================
     # MNE
-    #====================
+    # ====================
     from mne.time_frequency.tfr import morlet, cwt
     labels.append('MNE morlet')
     t = time()
@@ -381,9 +385,9 @@ def speed_test(repeat: int) -> None:
         result_mne = np.square(np.abs(cwt(wv_mne, mne_morlet)))
     times.append(time() - t)
 
-    #====================
+    # ====================
     # NinWavelet
-    #====================
+    # ====================
     sp_c_sin = cp.array([sin for n in range(10)])
     nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=1)
     labels.append('Ninwavelets\nAs multi array')
@@ -419,6 +423,7 @@ def speed_test(repeat: int) -> None:
     labels.append('Ninwavelets\nCPU')
 
     nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=1)
+
     def wrap(func, q, *args):
         q[:] = func(*args)[:]
     t = time()
@@ -435,7 +440,6 @@ def speed_test(repeat: int) -> None:
     times.append(time() - t)
     labels.append('Ninwavelets\nMulti-core CPU')
 
-
     # nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=0)
     # nin_morlet.mode = CWTMode.Normal
     # t = time()
@@ -444,7 +448,6 @@ def speed_test(repeat: int) -> None:
     # print(cp2np([result_morlet[-1, -1]], np.float))
     # times.append(time() - t)
     # labels.append('Ninwavelets\nNormal')
-
 
     # nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=0)
     # t = time()
@@ -457,7 +460,8 @@ def speed_test(repeat: int) -> None:
     t = time()
     nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=1)
     # for n in range(repeat):
-    result_morlet = [cp.asnumpy(nin_morlet.power(cp.asarray(sin), c_freqs)) for n in range(repeat)]
+    result_morlet = [cp.asnumpy(nin_morlet.power(
+        cp.asarray(sin), c_freqs)) for n in range(repeat)]
     # result = result_morlet.get()
     # result = list(cp2np(result_morlet, np.float))[0]
     times.append(time() - t)
@@ -469,9 +473,9 @@ def speed_test(repeat: int) -> None:
     print(times)
     print(labels)
 
-    #====================
+    # ====================
     # SWAN
-    #====================
+    # ====================
     # from swan import pycwt
     # swan_morlet = pycwt.Morlet()
     # t = time()
@@ -484,7 +488,7 @@ def speed_test(repeat: int) -> None:
     plt.bar(bars,
             1/np.array(times))
     plt.xticks(bars, labels,
-            fontproperties=font_prop)
+               fontproperties=font_prop)
 
     # plt.xlabel('Packages')
     plt.ylabel(f'Speed. ({repeat}trial / sec) Bigger is fast.')
@@ -493,16 +497,19 @@ def speed_test(repeat: int) -> None:
               f'{repeat}times')
     plt.show()
 
+
 def geom_test() -> None:
     morse = Morse()
     result = morse.power(np.random.random(1000), np.geomspace(1, 10, 1000))
     plt.imshow(result)
     plt.show()
 
+
 def tune(wave: Array) -> None:
     morse = Morse()
     for n in range(100):
         result = morse.power(wave, freqs)
+
 
 def tune_cuda(wave: Array, repeat: Optional[int] = None) -> None:
     ncp = cp if cuda else np
@@ -519,27 +526,27 @@ def tune_cuda(wave: Array, repeat: Optional[int] = None) -> None:
     t = time()
     for n in range(repeat):
         result = morlet.make_fft_wavelets(freq)
-        i= result[0, 0]
+        i = result[0, 0]
     print('Morlet', (time() - t))
-    
-    morlet.mode=CWTMode.Normal
+
+    morlet.mode = CWTMode.Normal
     t = time()
     for n in range(repeat):
         result = morlet.make_fft_wavelets(freq)
-        i= result[0, 0]
+        i = result[0, 0]
     print('Morlet Normal', (time() - t))
 
     t = time()
     for n in range(repeat):
         result = morlet_cp.make_fft_wavelets(freq_cp)
-        i= result[0, 0]
+        i = result[0, 0]
     print('Morlet GPU', (time() - t))
 
-    morlet.mode=CWTMode.Normal
+    morlet.mode = CWTMode.Normal
     t = time()
     for n in range(repeat):
         result = morlet_cp.make_fft_wavelets(freq_cp)
-        i= result[0, 0]
+        i = result[0, 0]
     print('Morlet Normal GPU', (time() - t))
 
     morse = Morse(sfreq=2048, real_wave_length=2,
@@ -547,7 +554,7 @@ def tune_cuda(wave: Array, repeat: Optional[int] = None) -> None:
     t = time()
     for n in range(repeat):
         result = morse.make_fft_wavelets(freq)
-        i= result[0, 0]
+        i = result[0, 0]
     print('Morse', (time() - t))
 
     morse = Morse(sfreq=2048, real_wave_length=2,
@@ -555,12 +562,14 @@ def tune_cuda(wave: Array, repeat: Optional[int] = None) -> None:
     t = time()
     for n in range(repeat):
         result = morse.make_fft_wavelets(freq_cp)
-        i= result[0, 0]
+        i = result[0, 0]
     print('Morse GPU', (time() - t))
+
 
 def tune_2d(wave: Array) -> None:
     morse = Morse(cuda=True)
     result = morse.power(wave, freqs)
+
 
 def test_2d() -> None:
     morse = Morse()
@@ -568,6 +577,7 @@ def test_2d() -> None:
     freqs = np.arange(30, 50, 1)
     morse.cwt(wv, freqs)
     morse.cwt(wv[0], freqs)
+
 
 def pad() -> None:
     morlet = Morlet(1000)
@@ -641,18 +651,19 @@ if __name__ == '__main__':
         speed_wavelet_test()
     if 'window' in argv:
         wave = np.ones(1000)
-        plt.plot(windows.hanning_window(1000, cuda=False, tukey_ratio=0.1) * wave)
+        plt.plot(windows.hanning_window(
+            1000, cuda=False, tukey_ratio=0.1) * wave)
         plt.plot(np.abs(ifft(wave)))
         plt.show()
     if 'app' in argv:
         sin = make_example(1, False, False)
-        sin10 = np.tile(sin, 100).reshape((100,sin.shape[-1]))
+        sin10 = np.tile(sin, 100).reshape((100, sin.shape[-1]))
         morse = Morse()
         freqs = np.arange(30, 150)
-        res=morse.cwt(sin, freqs)
+        res = morse.cwt(sin, freqs)
         t = time()
         for n in range(100):
-            res=morse.fourier_cwt(fft(sin), freqs)
+            res = morse.fourier_cwt(fft(sin), freqs)
         print(time() - t)
         plt.imshow(np.abs(res))
         plt.show()

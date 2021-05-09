@@ -1,12 +1,14 @@
 from .base import Array, np, cp
 from typing import Any, Union
 
+
 def gaus_window(array: Array, sigma: float = 0.4) -> Array:
     ncp = np if isinstance(array, np.ndarray) else cp
     sfreq = array.shape[-1]
     x = ncp.arange(0, sfreq, 1) / sfreq - 0.5
     window = ncp.exp(-ncp.square(x/sigma))
     return array * window
+
 
 def hanning_window(sfreq: int, hanning_ratio: float = 0.50,
                    tukey_ratio: float = 0,
@@ -39,13 +41,12 @@ def hanning_window(sfreq: int, hanning_ratio: float = 0.50,
         Default is 0.
     """
     ncp = cp if cuda else np
-    def mul(x: Any, y: Any) -> Any:
-        return 0 if x == 0 else x * y
+    def mul(x: Any, y: Any) -> Any: return 0 if x == 0 else x * y
     blackman = 0.08 if blackman is True else blackman
     x = ncp.arange(0, sfreq, 1) / sfreq
     if tukey_ratio == 0:
-        return (hanning_ratio\
-            - mul(1 - hanning_ratio - blackman, ncp.cos(2 * ncp.pi * x)))\
+        return (hanning_ratio
+                - mul(1 - hanning_ratio - blackman, ncp.cos(2 * ncp.pi * x)))\
             + mul(blackman, ncp.cos(4 * ncp.pi * x))
     else:
         x = ncp.where(
@@ -59,3 +60,21 @@ def hanning_window(sfreq: int, hanning_ratio: float = 0.50,
                   ncp.cos(2 * ncp.pi * (x - tukey_ratio/2) / tukey_ratio)),
             1)
         return x
+
+
+def nin_window(wave: np.ndarray, length: int,
+               cuda: bool = False) -> np.ndarray:
+    ncp = cp if cuda else np
+    edge_mean = (wave[0] + wave[-1]) / 2
+    wave = wave - edge_mean
+    start = np.sin(np.arange(length) / length / np.pi / 2)
+    window = np.concatenate(start, np.ones(wave.shape[0]), np.flip(start))
+    wave = ncp.pad(wave, length, 'edge')
+    return wave * window
+
+
+if __name__ == '__main__':
+    from matplotlib import pyplot as plt
+    i = np.random.random(1000)
+    win = nin_window(i, 500)
+    plt.plot(win)
