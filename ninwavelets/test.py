@@ -367,12 +367,12 @@ def speed_test(repeat: int) -> None:
     # ====================
     # Scipy
     # ====================
-    # from scipy import signal
-    # labels.append('Scipy morlet')
-    # t = time()
-    # for n in range(repeat_s):
-    #     result_sci = np.abs(signal.cwt(wv, signal.morlet2, freqs)) ** 2
-    # times.append(time() - t)
+    from scipy import signal
+    labels.append('Scipy morlet')
+    t = time()
+    for n in range(repeat_s):
+        result_sci = np.abs(signal.cwt(wv, signal.morlet2, freqs)) ** 2
+    times.append(time() - t)
 
     # ====================
     # MNE
@@ -386,16 +386,19 @@ def speed_test(repeat: int) -> None:
     times.append(time() - t)
 
     # ====================
+    # SWAN
+    # ====================
+    from swan import pycwt
+    swan_morlet = pycwt.Morlet()
+    t = time()
+    for n in range(repeat_s):
+        r = np.abs(pycwt.cwt_f(wv, freqs, 1000, swan_morlet)) ** 2
+    times.append(time() - t)
+    labels.append('Swan')
+
+    # ====================
     # NinWavelet
     # ====================
-    sp_c_sin = cp.array([sin for n in range(10)])
-    nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=1)
-    labels.append('Ninwavelets\nAs multi array')
-    t = time()
-    for n in sp_c_sin // 10:
-        result_morlet_cuda = nin_morlet.power(sp_c_sin, c_freqs)
-    print(result_morlet_cuda[-1, -1, -1])
-    times.append(time() - t)
 
     # nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=0)
     # nin_morlet.mode = CWTMode.Normal
@@ -420,14 +423,14 @@ def speed_test(repeat: int) -> None:
         result_morlet = nin_morlet.power(sin, freqs)
     print(result_morlet[-1, -1])
     times.append(time() - t)
-    labels.append('Ninwavelets\nCPU')
+    labels.append('Ninwavelets\nSingle-core CPU')
 
     nin_morlet = Morlet(cuda=False, sfreq=1000, cache_limit=1)
 
     def wrap(func, q, *args):
         q[:] = func(*args)[:]
     t = time()
-    for n in range(int(repeat / 5)):
+    for n in range(repeat):
         bufs = [np.empty((freqs.shape[0], sin.shape[0]))]
 
         ps = [Thread(target=wrap, args=(nin_morlet.power, buf, sin, freqs))
@@ -465,31 +468,22 @@ def speed_test(repeat: int) -> None:
     # result = result_morlet.get()
     # result = list(cp2np(result_morlet, np.float))[0]
     times.append(time() - t)
-    plt.imshow(result_morlet[0])
-    plt.show()
-    # print(result_mne.shape)
-    # print(result_morlet[0, 0].get().shape)
-    labels.append('Ninwavelets\nGPU')
+    labels.append('Ninwavelets\nGPU for each wave')
     print(times)
     print(labels)
 
-    # ====================
-    # SWAN
-    # ====================
-    # from swan import pycwt
-    # swan_morlet = pycwt.Morlet()
-    # t = time()
-    # for n in range(repeat_s):
-    #     r = np.abs(pycwt.cwt_f(wv, freqs, 1000, swan_morlet)) ** 2
-    # times.append(time() - t)
-    # labels.append('Swan')
+    sp_c_sin = cp.array([sin for n in range(10)])
+    nin_morlet = Morlet(cuda=True, sfreq=1000, cache_limit=1)
+    labels.append('Ninwavelets\nby GPU grid')
+    t = time()
+    for n in sp_c_sin // 10:
+        result_morlet_cuda = nin_morlet.power(sp_c_sin, c_freqs)
+    print(result_morlet_cuda[-1, -1, -1])
+    times.append(time() - t)
 
     bars = np.arange(0, len(times), 1)
-    plt.bar(bars,
-            1/np.array(times))
-    plt.xticks(bars, labels,
-               fontproperties=font_prop)
-
+    plt.bar(bars / bars[1], 1/np.array(times))
+    plt.xticks(bars / bars[1], labels, fontproperties=font_prop)
     # plt.xlabel('Packages')
     plt.ylabel(f'Speed. ({repeat}trial / sec) Bigger is fast.')
     plt.title(f'{length}sec wave, Sampling frequency'
