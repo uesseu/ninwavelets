@@ -42,7 +42,7 @@ def get_daubechies_coeff(n: int) -> np.ndarray:
     return np.array(daubechies_coeff[(n >> 1) - 1])
 
 
-class OrthogonalWavelet():
+class DaubechiesWavelet:
     """
     A class to make orthogonal wavelet.
     Now, it only yields Daubechies wavelet.
@@ -68,7 +68,7 @@ class OrthogonalWavelet():
         self.flow: int = 0
 
     def make_all(self, length: int, order: int = 63,
-                 mod_num: int = 100) -> 'OrthogonalWavelet':
+                 mod_num: int = 100) -> 'DaubechiesWavelet':
         """
         Make father wavelet and mother wavelet.
         It is based on FFT, but includes modification of errors.
@@ -222,10 +222,12 @@ def mra(wave: np.ndarray, cs: np.ndarray) -> List[np.ndarray]:
         wv, cp = [sum(np.roll(wave * coeff, -num)
                       for num, coeff in enumerate(coeffs))
                   for coeffs in (cs, gs)]
-        wave = wv[0::2]
-        ds.append(cp[0::2])
+        wave = wv[..., 0::2]
+        ds.append(cp[..., 0::2])
     return ds
 
+def daubechies_mra(wave: np.ndarray, coeff: int) -> np.ndarray:
+    return mra(wave, get_daubechies_coeff(coeff))
 
 def haar_mra(x: np.ndarray) -> Tuple[list, float]:
     """
@@ -258,7 +260,7 @@ if __name__ == '__main__':
     ord = 63
     cs = get_daubechies_coeff(4)
     length: int = (len(cs) - 1) * 1024
-    wavelet = OrthogonalWavelet(cs).make_all(length, ord)
+    wavelet = DaubechiesWavelet(cs).make_all(length, ord)
     father = wavelet.father
     mom = wavelet.mother
     plt.plot(father)
@@ -267,10 +269,11 @@ if __name__ == '__main__':
     plt.plot(father - wavelet.make_mother(False))
     plt.show()
     wave = np.sin(np.arange(0, 1 << 13, 1) / 200)
+    wave = np.random.rand(wave.shape[0])
 
     from time import time
     t = time()
-    j = mra(wave, get_daubechies_coeff(4))
+    j = daubechies_mra(wave, 8)
     print(time() - t)
     t = time()
     d = haar_mra(wave)

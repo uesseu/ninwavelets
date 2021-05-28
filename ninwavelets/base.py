@@ -556,6 +556,7 @@ class WaveletMultiplier(WaveletsContainer):
         dimension: int = len(wave.shape)
         wave_shape: tuple = wave.shape
         remake_plan = False
+        ncp = cp if self.cuda else np
         if self.cuda:
             wave = wave.astype(cp.complex)
         # This if statement can not be method, for performance.
@@ -565,6 +566,7 @@ class WaveletMultiplier(WaveletsContainer):
             if self.cache_limit == 1:
                 if self.fft_wavelets is None:
                     self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
+                    self._to_ifft = ncp.zeros_like(self.fft_wavelets, dtype=ncp.complex)
                     sid = ''.join((str(wave_shape), str(id(freqs))))
                     self._kept_fft.update({sid: self.fft_wavelets})
                     self.cache_num += 1
@@ -574,11 +576,11 @@ class WaveletMultiplier(WaveletsContainer):
                     self.fft_wavelets = self._kept_fft[sid]
                 else:
                     self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
+                    self._to_ifft = ncp.zeros_like(self.fft_wavelets, dtype=ncp.complex)
                     if((self.cache_limit is None) or
                        self.cache_limit > self.cache_num):
                         self._kept_fft.update({sid: self.fft_wavelets})
                         self.cache_num += 1
-        ncp = cp if self.cuda else np
         # logger.info('Applying FFT mul.')
         # This 7 lines makes this fast a little.
         if dimension == 2:
@@ -589,14 +591,20 @@ class WaveletMultiplier(WaveletsContainer):
         if self.cuda and dimension == 1:
             if remake_plan:
                 self._fft_plan = cx_fft.get_fft_plan(wave, axes=(0,))
-            to_ifft = self.fft_wavelets * cx_fft.fft(wave, plan=self._fft_plan)
+            ncp.multiply(self.fft_wavelets,
+                         cx_fft.fft(wave, plan=self._fft_plan),
+                         out=self._to_ifft)
             if remake_plan:
-                self._ifft_plan = cx_fft.get_fft_plan(to_ifft, axes=(1,))
+                self._ifft_plan = cx_fft.get_fft_plan(self._to_ifft, axes=(1,))
             if self.cache_limit == 0:
                 self.fft_wavelets = None
                 self._kept_fft = {}
-            return cx_fft.ifft(to_ifft, plan=self._ifft_plan)
-        return ncp.fft.ifft(self.fft_wavelets * ncp.fft.fft(wave))
+            return cx_fft.ifft(self._to_ifft, plan=self._ifft_plan)
+        else:
+            ncp.multiply(self.fft_wavelets,
+                         ncp.fft.fft(wave),
+                         out=self._to_ifft)
+            return ncp.fft.ifft(self._to_ifft)
 
     def fourier_cwt(self, wave: Array, freqs: Numbers,
                     reuse_wavelets: bool = True,

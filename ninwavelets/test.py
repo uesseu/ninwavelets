@@ -7,7 +7,7 @@ from threading import Thread
 from scipy.fftpack import fft, ifft
 from ninwavelets import (Morse, Morlet, CWTMode, np2cp,
                          plot_tf, MexicanHat, Shannon, Baseline,
-                         windows)
+                         windows, daubechies_mra)
 from time import time
 from sys import argv
 from logging import getLogger, INFO, WARNING, basicConfig, ERROR, CRITICAL
