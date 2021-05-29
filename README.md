@@ -1,8 +1,10 @@
 # NinWavelets
-This is a python package for analystic wavelet transform.  
-Morlet, Generalized Morse(GMW) and so on.  
+This is a python package for wavelet transform.  
+Morlet, Generalized Morse(GMW), Daubechies and so on.  
+But biorthogonal wavelet is not yet coded.
 Generally, CWT is very slow. But this is extremely fast for a python package.  
 It is based on Numpy or Cupy, and it may be fast especially on Cupy.  
+In case of MRA... it is normal speed, I think ;).
 
 ![My EEG Power!](img/alpha.png)  
 This is my alpha band of EEG which was processed by this package.
@@ -26,6 +28,7 @@ Please see Advantages and Limitations.
     + Generalized Morse(A flexible wavelet, which has two parameters.)
     + Morlet/Gabor(Frourier transformed version of Morlet/Gabor.)
     + Mexcan hat
+    + Daubechies/Haar MRA
     + May be more(It is easy to scale!)
 - Skipping one FFT when performing CWT.
     + May be better if you use FFT method.
@@ -36,9 +39,12 @@ Please see Advantages and Limitations.
         * Asynchronous calculation by GPU.
     + Even if you can not use cupy, it is very fast.
         * About 3 to 15 times faster than other prevalent packages.
+    + I gave priority to speed and usability, not readability.
+- Easy to use
+    + The interface is intuitive, for me ;)
 - Reliability
     + Being brand new project, it has no achivement...
-    + There may be lots of bugs.
+    + There may be lots of bugs? (I am searching)
     + Do not rely on it! Read the source code! Test by your self!
 - In heavily development
     + Destructive change may be performed.
@@ -61,6 +67,7 @@ pip install ninwavelets
 These are automatically installed.  
 - scipy
 - numpy
+- cython
 
 If you want to use cuda, please setup cuda and cupy.  
 [https://developer.nvidia.com/cuda-zone](https://developer.nvidia.com/cuda-zone)  
@@ -82,7 +89,7 @@ If cupy could not be imported, it does not raise error but reports it.
 - Make instance of wavelet.
 - Make frequency instance as numpy or cupy.
   + If you did not make it, ninwavelets may becomes slower!
-- Perform cwt.
+- Perform cwt, enjoy!
 
 
 ```python
@@ -93,7 +100,7 @@ freqs = cp.array(20, 100, 1)
 wave = cp.sin(cp.arange(0, 1000, 1))
 morse = Morse(1000)
 morse.cwt(wave, freqs)
-# morse.cwt(wave, cp.arange(20, 100, 1))   is little bit slow!
+# morse.cwt(wave, cp.arange(20, 100, 1))   may be little bit slow!
 
 # 2 dimension wave can be converted!
 morse.cwt(np.array([wave for n in range(10)], freqs)
@@ -261,6 +268,11 @@ They are classes for wavelet. They are sub classes of WaveletBase.
 You can inherit 'WaveletBase' class and make your own wavelet.  
 I wrote some wavelets.  
 
+- Morse
+- Morlet
+- MexicanHat
+- Shannon
+
 For example, lets see Morse class!  
 
 
@@ -332,8 +344,8 @@ MorseWavelet: list of np.ndarray
 ### make_fft_waves
 
 ```python
-make_fft_waves(self, total: float, one: float,
-               freqs: Iterable) -> Iterator:
+wavelet.make_fft_waves(self, total: float, one: float,
+                       freqs: Iterable) -> Iterator:
 ```
 
 Make Fourier transformed Wavelet.  
@@ -499,6 +511,23 @@ The formulas may be written in mathmatical papers! ;)
 If you want to use your own logger, you can.  
 Methods can catch logging.Logger objects.  
 
+# Orthogonal Wavelets
+As orthogonal wavelets, ninwavelets can use Daubechies wavelet and Haar wavelet.
+This is experimental and in heavy development, and so, API may be changed in the future.
+Further more, it is originally fast algorithm and there may be better softwares.  
+But... some one may say 
+
+> Author of ninwavelets cannot understand orthogonal wavelets.
+> Author may be a foolish baby.
+
+Waaa! I was frustrated and orthogonal wavelets was developped.
+
+## API
+- DaubechiesWavelet
+    + A object to show DaubechiesWavelet only.
+- daubechies_mra
+    + Run MRA.
+
 # Advantages and Limitations
 
 ## Speed
@@ -539,6 +568,8 @@ But it is not good for performance to make new wavelets every time,
 if wave length or parameters is not changed every time.  
 Further more, making numpy array or cupy arry takes much time.  
 And so, it memorizes wavelets after cwt.  
+Because it remembers wavelets based on id of python object, 
+frequency array should be contained in a python object.
 
 This is the bad example
 
@@ -640,7 +671,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 # TODO
 
-- Other wavelets
+- Nonorthogonal wavelets
     + [x] Morse
         * [x] Compared with mne
     + [x] Morlet
@@ -648,18 +679,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     + [x] Gabor
         * [x] Compared with mne
     + [x] Mexican hat
-    + [x] Haar
+    + [ ] Meyer
+    + [ ] Shannon
     + [x] Scalability for unknown wavelets
+- Orthogonal wavelets
+    + Orthogonal
+	* [x] Haar
+        * [x] Daubechies
+    + Biorthogonal
+        * [ ] I have never learned... ;(
 - More methods
-    + [x] Decimation
-        * It will not be written. It must be a user's work.
-        * "Make each program do one thing well."
-    + [ ] DWT
-        * [ ] Shannon
-        * [ ] Haar
     + [ ] 2D wavelet
-        * [x] FastMode
-        * [x] Convolve
+        * [ ] FastMode
+        * [ ] Convolve
 - [x] Refactor
     + [x] Do not use fft derived from multiple packages.
 - [x] Use cuda or cython and speedup!
@@ -678,3 +710,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 - [x] Logging
 - [ ] Bug fix
     + Endless!
+
+# Not TODO
++ Decimation
+    * It will not be written. It must be a user's work.
+    * "Make each program do one thing well."
