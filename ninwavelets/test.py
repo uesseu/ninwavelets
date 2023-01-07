@@ -1,5 +1,4 @@
 import numpy as np
-import cupy as cp
 from typing import Union, Optional, List
 from multiprocessing import Pool
 from threading import Thread
@@ -18,6 +17,12 @@ font_path = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
 font_prop = matplotlib.font_manager.FontProperties(fname=font_path, size=18)
 matplotlib.rcParams['font.family'] = font_prop.get_name()
 plt.rcParams["font.family"] = "IPAexGothic"
+try:
+    import cupy as cp
+except:
+    print('Cupy could not be loaded')
+    cp = np
+
 # import seaborn as sns
 # sns.set(font_scale=2)
 
