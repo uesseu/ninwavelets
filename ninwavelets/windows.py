@@ -64,6 +64,19 @@ def hanning_window(sfreq: int, hanning_ratio: float = 0.50,
 
 def nin_window(wave: np.ndarray, length: int,
                cuda: bool = False) -> np.ndarray:
+    """
+    Nin window is original experimental window.
+    This is tukey window with padding.
+    This window does not change raw wave.
+    However, this adds edge of length and you should cut after transform.
+
+    wave: Array
+        wave to apply window.
+    length: int
+        length of edge to pad.
+    cuda: bool
+        use cuda or not.
+    """
     ncp = cp if cuda else np
     edge_mean = (wave[0] + wave[-1]) / 2
     wave = wave - edge_mean
