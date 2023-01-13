@@ -13,18 +13,13 @@ from logging import getLogger, INFO, WARNING, basicConfig, ERROR, CRITICAL
 from functools import partial
 import matplotlib.pyplot as plt
 import matplotlib
-font_path = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
-font_prop = matplotlib.font_manager.FontProperties(fname=font_path, size=18)
-matplotlib.rcParams['font.family'] = font_prop.get_name()
-plt.rcParams["font.family"] = "IPAexGothic"
 try:
     import cupy as cp
+    has_cupy = True
 except:
     print('Cupy could not be loaded')
+    has_cupy = False
     cp = np
-
-# import seaborn as sns
-# sns.set(font_scale=2)
 
 basicConfig(level=WARNING)
 log = getLogger()
@@ -44,74 +39,23 @@ def make_example(length: float = 3, cuda: bool = True,
                                     [int(length * 250), int(length * 250)],
                                     'constant') * 300 * 2 * ncp.pi)
                     )
-    # result = [ncp.copy(sin) for n in range(1000)]
     return sin
 
 
-def test() -> None:
-    morse = Morse(1000, 17.5, 3)
-    freq = 60
-    time = np.arange(0, 3, 0.001)
-    sin = np.array(np.sin(time * freq * 2 * np.pi))
-    result = morse.power(sin, np.arange(1, 100, 1))
-    plt.imshow(result, cmap='RdBu_r')
-    plt.gca().invert_yaxis()
-    plt.title('CWT of 60Hz sin wave')
-    plt.show()
+class WaveCompare:
+    def __init__(self, a: Array, b: Array) -> bool:
+        if hasattr(a, 'asnumpy'):
+            self.a = a.asnumpy()
+        if hasattr(b, 'asnumpy'):
+            self.b = b.asnumpy()
+        self.data = np.std(a - b) / np.std((a + b) / 2) 
 
+    def max(self):
+        return np.max(self.data)
 
-def test3d() -> None:
-    sfreq = 1000
-    hz = 20
-    from mne.time_frequency import morlet
-    go = morlet(sfreq, [hz])[0]
-    mm = morlet(sfreq, [hz], zero_mean=True)[0]
-    morse_obj = Morse(sfreq, 17.5, 3)
-    morse = morse_obj.make_wavelets([hz])[0]
-    nm = Morlet(sfreq)
-    nm.mode = CWTMode.Normal
-    nin_morlet = nm.make_wavelets([hz])[0]
+    def mean(self):
+        return np.mean(self.data)
 
-    half_morse = morse.shape[0] / 2
-    morse_time = np.arange(-half_morse, half_morse, 1)
-    half_mm = mm.shape[0] / 2
-    morlet_time = np.arange(-half_mm, half_mm, 1)
-    fig = plt.figure()
-    ax = fig.add_subplot(211)
-    print(np.linalg.norm(morse))
-    print(np.linalg.norm(mm))
-    print(np.linalg.norm(nin_morlet))
-
-    ax.plot(morse_time, morse, label='Morse Wavelet')
-    ax.plot(morse_time, nin_morlet, label='Morlet Wavelet')
-    ax.plot(morse_time, morse.imag, label='Morse Imag')
-    ax.plot(morlet_time, mm, label='MNE Morlet')
-    ax.plot(morlet_time, mm.imag, label='MNE Morlet imag')
-    ax.plot(morlet_time, go, label='Gabor Wavelet')
-
-    ax1 = fig.add_subplot(212, projection='3d')
-    ax1.scatter3D(morse.real, morse_time, morse.imag, label='morse')
-    ax1.scatter3D(mm.real, morlet_time, mm.imag, label='MNE morlet')
-    ax1.scatter3D(go.real, morlet_time, go.imag, label='gobar')
-    handler, label = ax.get_legend_handles_labels()
-    handler1, label1 = ax1.get_legend_handles_labels()
-    ax.legend(label+label1, loc='upper right')
-    ax.set_title('morse and morlet')
-    plt.show()
-
-
-def plot_sin_fft() -> None:
-    freq = 60
-    time = np.arange(0, 0.3, 0.001)
-    sin = np.array(np.sin(time * freq * 2 * np.pi))
-    time2 = np.arange(0, 0.6, 0.001)
-    sin2 = np.array(np.sin(time2 * freq * 2 * np.pi))
-    plt.plot(sin)
-    plt.plot(sin2)
-    plt.show()
-    plt.plot(np.abs(fft(sin)))
-    plt.plot(np.abs(fft(sin2)))
-    plt.show()
 
 
 def precision() -> None:
@@ -158,7 +102,6 @@ def cwt_test(cuda: bool = False, show: bool = False,
     log.info('''Fast mode test for GMW''')
     t = time()
     morse = Morse(cuda=cuda, sfreq=1000)
-    # morse.mode = CWTMode.Normal
     result_morse = ncp.square(ncp.abs(
         morse.cwt(ncp.array([sin]), ncp.arange(min_freq, max_freq, 1))))
     print(f'Morse {time() - t}')
@@ -168,9 +111,7 @@ def cwt_test(cuda: bool = False, show: bool = False,
     log.info('''Normal mode test
 Normal mode is only for numpy
 Because cupy 7.6.0 has no method named convolve''')
-    # nin_morlet = Morlet(cuda=False, sfreq=1000)
     nin_morlet = Morlet(cuda=False, sfreq=1000)
-    # nin_morlet.mode = CWTMode.Normal
     t = time()
     result_morlet = np.square(np.abs(
         nin_morlet.cwt(ncp.array([sin]), ncp.arange(min_freq, max_freq, 1))))
@@ -180,30 +121,15 @@ Because cupy 7.6.0 has no method named convolve''')
         sin = cp.asnumpy(sin)
         mne_morlet = morlet(1000, np.arange(
             min_freq, max_freq, 1), zero_mean=True)[0]
-        # morlet = Morlet(cuda=False)
-        # morlet.mode = CWTMode.Fast
     else:
-        sin = cp.asnumpy(sin)
-        # morlet = Morlet(cuda=False)
+        if has_cupy:
+            sin = cp.asnumpy(sin)
     t = time()
     result_mne = np.abs(cwt(np.array([sin]),
                             morlet(1000, np.arange(min_freq, max_freq, 1)),
                             use_fft=True)[0] ** 2)
     print(f'MNE {time() - t}')
     print('Comparison')
-    # plt.imshow((result_morlet[0] - result_mne),
-    #            vmin=0, vmax=0.0000005, cmap='rainbow')
-
-    # print(np.sqrt((np.square(result_morlet[0][:, 200: 800]
-    #                          - result_mne[:, 200: 800])
-    #       / result_morlet[0][:, 200: 800]).max()))
-
-    # plt.imshow(result_morlet[0][:, 200: 800] /
-    #            result_mne[: , 200: 800],
-    #            cmap='rainbow', vmin = 0.999, vmax=1.001)
-    # plt.imshow(np.abs(np.fft.fft(result_morlet[0][:, 200: 800]) /
-    #                   np.fft.fft(result_mne[: , 200: 800])),
-    #            cmap='rainbow', vmin = 0.9999, vmax=1.0001)
     print(np.abs(np.fft.fft(result_morlet[0])[:, 200: 800] /
                  np.fft.fft(result_mne)[:, 200: 800]).max())
     print(result_morse.shape)
@@ -212,8 +138,6 @@ Because cupy 7.6.0 has no method named convolve''')
     if show:
         # plt.plot(nin_morlet.wavelets[15])
         plt.show()
-        import seaborn as sns
-        sns.set(font_scale=2)
         if cuda:
             result_morse = cp.asnumpy(result_morse)
             result_morlet = cp.asnumpy(result_morlet)
@@ -236,18 +160,17 @@ Because cupy 7.6.0 has no method named convolve''')
         axcbs = [make_axes_locatable(ax).new_horizontal(size='2%', pad=0.05)
                  for ax in axes]
         [fig.add_axes(ac) for ac in axcbs]
-        [ax.set_ylabel('Frequency (Hz)', fontsize=24) for ax in axes]
-        [ax.set_xlabel('Time (Second)', fontsize=24) for ax in axes]
+        [ax.set_ylabel('Frequency (Hz)') for ax in axes]
+        [ax.set_xlabel('Time (Second)') for ax in axes]
         [plt.colorbar(im, cax=cb) for im, cb in zip(ims, axcbs)]
         [ax.set_aspect('auto') for ax in axes]
         [ax.set_yticks(np.arange(0, 70, 20)) for ax in axes]
-        [ax.set_yticklabels(np.arange(30, 100, 20), fontsize=24)
+        [ax.set_yticklabels(np.arange(30, 100, 20))
          for ax in axes]
         [ax.set_xticks(np.arange(0, 1000, 200)) for ax in axes]
-        [ax.set_xticklabels(np.arange(0, 1000, 200), fontsize=24)
+        [ax.set_xticklabels(np.arange(0, 1000, 200))
          for ax in axes]
         plt.tight_layout()
-        # plt.subplots_adjust(wspace=0.4, hspace=0.5)
         fig.savefig('/home/ninja/Frontiers_LaTex_Templates/imgs/cwt.jpg')
         plt.show()
     print(f'Morse max if {np.max(np.abs(result_morse))}')
@@ -312,27 +235,6 @@ def fft_wavelet_test() -> None:
             0], label='Morlet Wavelet Normal Mode')
     handler, label = ax.get_legend_handles_labels()
     ax.legend(label, loc='upper right')
-    plt.show()
-
-
-def eeg(cuda: bool) -> None:
-    '''
-    This test code reads my eeg.
-    I am not sure whether I can open my eeg.
-    My boss may says "You shoulnt!"
-    If you have your own eeg, why dont you process your eeg?
-    '''
-    from mne.io import Raw
-    raw = Raw('/home/ninja/ninja.fif')
-    data = raw.get_data()[raw.ch_names.index('EEG O1-Ref')]
-    d = data[150*500: 190*500]
-    d = Baseline(d, 1000, 0, 1).zscore()
-    tf = Morse(raw.info['sfreq'], cuda=True).power(d, np.arange(0.1, 50, 0.1))
-    ax = plot_tf(tf, frange=(0, 50, 10),
-                 trange=(0, 40, 10), sfreq=500, show=False)
-    ax.set_title('My EEG power(O1)')
-    ax.set_xlabel('Time Course(sec)')
-    ax.set_ylabel('Hz')
     plt.show()
 
 
@@ -488,7 +390,7 @@ def speed_test(repeat: int) -> None:
 
     bars = np.arange(0, len(times), 1)
     plt.bar(bars / bars[1], 1/np.array(times))
-    plt.xticks(bars / bars[1], labels, fontproperties=font_prop)
+    plt.xticks(bars / bars[1], labels)
     # plt.xlabel('Packages')
     plt.ylabel(f'Speed. ({repeat}trial / sec) Bigger is fast.')
     plt.title(f'{length}sec wave, Sampling frequency'
@@ -612,8 +514,6 @@ if __name__ == '__main__':
         test_2d()
     if 'cwt' in argv:
         cwt_test(cuda, show=True)
-    if 'eeg' in argv:
-        eeg(cuda)
     if 'speed' in argv:
         if 'multi' in argv:
             with Pool(6) as p:
@@ -678,10 +578,3 @@ if __name__ == '__main__':
         precision()
 
     t = time()
-    # i = cp2np([cp.arange(3, 19) for n in range(4000)])
-    # print(i[0])
-    # print(time() - t)
-    # t = time()
-    # i = [cp.arange(3, 19) for n in range(4000)]
-    # print(i[0])
-    # print(time() - t)
