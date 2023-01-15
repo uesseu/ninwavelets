@@ -576,7 +576,7 @@ class WaveletMultiplier(WaveletsContainer):
                     self.fft_wavelets = self._kept_fft[sid]
                 else:
                     self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
-                    self._to_ifft = ncp.zeros_like(self.fft_wavelets, dtype=ncp.complex)
+                    self._to_ifft = ncp.zeros_like(self.fft_wavelets, dtype=complex)
                     if((self.cache_limit is None) or
                        self.cache_limit > self.cache_num):
                         self._kept_fft.update({sid: self.fft_wavelets})
