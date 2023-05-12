@@ -1,10 +1,9 @@
 from setuptools import setup, find_packages
-from Cython.Build import cythonize
 
 setup(
     name='ninwavelets',
     version='0.3.0',
-    install_requires=['scipy', 'numpy', 'cython'],
+    install_requires=['scipy', 'numpy'],
     package_dir={'ninwavelets': 'ninwavelets'},
     packages=find_packages(),
     description='Very fast continuous wavelet transform package',
@@ -15,6 +14,5 @@ It can perform various wavelets(Morlet, GMW).''',
     author='Shoichiro Nakanishi',
     author_email='sheepwing@kyudai.jp',
     license='MIT',
-    ext_modules=cythonize("ninwavelets/factor.pyx"),
     zip_safe=False,
 )

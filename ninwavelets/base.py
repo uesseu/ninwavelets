@@ -375,7 +375,7 @@ class WaveletGenerator:
         else:
             logger.info('Making ffted wavelet.')
             w = ncp.fft.fft(self.make_wavelets(freqs))
-            w.real, w.imag = ncp.abs(w.real), ncp.imag(w.imag)
+            # w.real, w.imag = ncp.abs(w.real), ncp.imag(w.imag)
             self.fft_wavelets = w
             return self.fft_wavelets
 

@@ -63,7 +63,8 @@ def hanning_window(sfreq: int, hanning_ratio: float = 0.50,
 
 
 def nin_window(wave: np.ndarray, length: int,
-               cuda: bool = False) -> np.ndarray:
+               cuda: bool = False,
+               mode: str = 'mul') -> np.ndarray:
     """
     Nin window is original experimental window.
     This is tukey window with padding.
@@ -80,8 +81,8 @@ def nin_window(wave: np.ndarray, length: int,
     ncp = cp if cuda else np
     edge_mean = (wave[0] + wave[-1]) / 2
     wave = wave - edge_mean
-    start = np.sin(np.arange(length) / length / np.pi / 2)
-    window = np.concatenate(start, np.ones(wave.shape[0]), np.flip(start))
+    start = np.sin(np.arange(length) / length * np.pi / 2)
+    window = np.hstack((start, np.ones(wave.shape[0]), np.flip(start)))
     wave = ncp.pad(wave, length, 'edge')
     return wave * window
 
