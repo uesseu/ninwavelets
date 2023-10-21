@@ -6,8 +6,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from functools import reduce
 from operator import mul
 from logging import getLogger, NullHandler, Logger
-import pyximport
-pyximport.install()
+# import pyximport
+# pyximport.install()
 from . import factor
 
 logger = getLogger('ninwavelets')
@@ -688,7 +688,7 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
             self.wave_length = wave.shape[-1]
             ncp = cp if self.cuda else np
             if padding:
-                self.wave_length = factor.factor(wave.shape[-1], 7)
+                self.wave_length = factor(wave.shape[-1], 7)
                 padding = False if self.wave_length == wave.shape else True
                 if self.wave is None or padding:
                     self.wave = ncp.zeros(wave.shape[:-1]
