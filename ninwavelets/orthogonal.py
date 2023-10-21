@@ -1,5 +1,50 @@
+# -*- coding: utf-8 -*-
+"""Orthogonal wavelet module.
+This is an orthogonal wavelet module in ninwavelets.
+This is not perfect.
+
+    from matplotlib import pyplot as plt
+    fig: plt.Figure = plt.figure()
+    ax = fig.add_subplot(111)
+    ord = 63
+    cs = get_daubechies_coeff(4)
+    length: int = 1024
+    wavelet = DaubechiesWavelet(cs).make_all(length, ord)
+    ax.plot(wavelet.father)
+    ax.plot(wavelet.mother)
+    ax.set_title('DaubechiesWavelet')
+    plt.show()
+    wave = np.sin(np.arange(0, 1 << 13, 1) / 200)
+    j = daubechies_mra(wave, 8)
+    fig = plt.figure()
+    pls = 8
+    axes = [fig.add_subplot((pls+1) * 100 + 11 + n)
+            for n in range(pls+1)]
+    for n in range(pls):
+        axes[n].plot(np.arange(0, len(wave), 2**(n+1)), j[n])
+    fig.suptitle('MRA')
+    plt.show()
+    x = np.sin(np.arange(1024)/100)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(x)
+    ax.set_title('Sin wave')
+    plt.show()
+    res_haar, m = haar_mra(x)
+    y = haar_imra(res_haar, m)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(y)
+    ax.set_title('Inverted MRA')
+    plt.show()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(x - y)
+    ax.set_title('Error')
+    plt.show()
+"""
+
 import numpy as np
-from matplotlib import pyplot as plt
 from functools import reduce
 from operator import mul
 from typing import List, Optional, Union, Tuple, cast
@@ -55,7 +100,6 @@ class DaubechiesWavelet:
         self.coeff: Optional[np.ndarray] = np.array(coeff)
         self.mother_coeff: Optional[np.ndarray] = coeff_father2mother(coeff)
         # Flow 1
-        self.length: Optional[int] = None
         self.order: Optional[int] = None
         # Flow 2
         self.fft_father: Optional[np.ndarray] = None
@@ -66,6 +110,9 @@ class DaubechiesWavelet:
         # Flow 5
         self.fft_mother: Optional[np.ndarray] = None
         self.flow: int = 0
+
+    def _make_length(self, length: int):
+        return (len(self.coeff) - 1) * length
 
     def make_all(self, length: int, order: int = 63,
                  mod_num: int = 100) -> 'DaubechiesWavelet':
@@ -87,7 +134,7 @@ class DaubechiesWavelet:
             Modification number. It is based on iteration.
         """
         self.make_fourier_father(length, order)
-        self.make_father()
+        self.make_father(length)
         self.modify_father(mod_num)
         self.make_mother()
         self.make_fft_mother()
@@ -108,16 +155,19 @@ class DaubechiesWavelet:
             Bigger is good, but because of modification, is not important.
             It crashed when order is bigger than 63 in my computer.
         """
-        self.fft_father = make_fourier_father(self.coeff, length, order)
+        self.order = order
+        self.fft_father = make_fourier_father(self.coeff,
+                                              self._make_length(length),
+                                              order)
         return self.fft_father
 
-    def make_father(self) -> np.ndarray:
+    def make_father(self, length: int) -> np.ndarray:
         """
         Make scaling function from fourier transformed wavelet.
         It is so called father wavelet.
         """
         self.father = np.fft.ifft(self.fft_father).real
-        self.father *= length / np.sqrt(1 << ord)
+        self.father *= self._make_length(length) / np.sqrt(1 << self.order)
         self.father = self.father - self.father[-1]
         return self.father
 
@@ -257,41 +307,42 @@ def haar_imra(mra: list, mean: float = 0) -> np.ndarray:
 
 
 if __name__ == '__main__':
+    from matplotlib import pyplot as plt
+    fig: plt.Figure = plt.figure()
+    ax = fig.add_subplot(111)
     ord = 63
     cs = get_daubechies_coeff(4)
-    length: int = (len(cs) - 1) * 1024
+    length: int = 1024
     wavelet = DaubechiesWavelet(cs).make_all(length, ord)
-    father = wavelet.father
-    mom = wavelet.mother
-    plt.plot(father)
-    plt.plot(mom)
-    plt.show()
-    plt.plot(father - wavelet.make_mother(False))
+    ax.plot(wavelet.father)
+    ax.plot(wavelet.mother)
+    ax.set_title('DaubechiesWavelet')
     plt.show()
     wave = np.sin(np.arange(0, 1 << 13, 1) / 200)
-    wave = np.random.rand(wave.shape[0])
-
-    from time import time
-    t = time()
     j = daubechies_mra(wave, 8)
-    print(time() - t)
-    t = time()
-    d = haar_mra(wave)
-    print(time() - t)
-
     fig = plt.figure()
     pls = 8
-    axes = [fig.add_subplot((pls+1) * 100 + 11 + n) for n in range(pls+1)]
-    axes[0].plot(np.arange(0, len(wave)), wave)
+    axes = [fig.add_subplot((pls+1) * 100 + 11 + n)
+            for n in range(pls+1)]
     for n in range(pls):
-        axes[n+1].plot(np.arange(0, len(wave), 2**(n+1)), j[n])
+        axes[n].plot(np.arange(0, len(wave), 2**(n+1)), j[n])
+    fig.suptitle('MRA')
     plt.show()
     x = np.sin(np.arange(1024)/100)
-    plt.plot(x)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(x)
+    ax.set_title('Sin wave')
     plt.show()
     res_haar, m = haar_mra(x)
     y = haar_imra(res_haar, m)
-    plt.plot(y)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(y)
+    ax.set_title('Inverted MRA')
     plt.show()
-    plt.plot(x - y)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(x - y)
+    ax.set_title('Error')
     plt.show()
