@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+from functools import reduce
+from operator import mul
 import numpy as np
 from typing import Union, List, Iterator, Callable, Tuple, cast, Optional
 from enum import Enum
@@ -6,9 +8,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from functools import reduce
 from operator import mul
 from logging import getLogger, NullHandler, Logger
-# import pyximport
-# pyximport.install()
-from . import factor
+from portclang import factor
 
 logger = getLogger('ninwavelets')
 logger.addHandler(NullHandler())
@@ -174,7 +174,7 @@ class CWTMode(Enum):
     # ifft(Convolve(fft(wavelet) @ fft(wave)))
     Fast: int = 1
     # Use FFTed formula only.
-    # It may be best, if there is FFTed formula.
+    # It may be best, if there is a FFTed formula.
 
     # ifft(Convolve(ffted_wavelet @ fft(wave)))
     Convolve: int = 2
@@ -253,7 +253,7 @@ class WaveletFormula:
         freqs: np.ndarray[np.float, ndim=1]
             Frequencies.
             If length of time is same as freqs, It is easy to write.
-        freq: float
+        freq: Union[Array, float]
             If you want to setup peak frequency,
             this variable may be useful.
 
@@ -532,7 +532,7 @@ class WaveletMultiplier(WaveletsContainer):
 
     def _cwt_fft(self, wave: Array, freqs: Numbers,
                  reuse_wavelets: bool = True, logger: Logger = logger,
-                 pad: bool = False) -> Array:
+                 padding: bool = False) -> Array:
         '''cwt
         Run CWT based on fft.
 
@@ -558,53 +558,43 @@ class WaveletMultiplier(WaveletsContainer):
         remake_plan = False
         ncp = cp if self.cuda else np
         if self.cuda:
-            wave = wave.astype(cp.complex)
+            wave = wave.astype(cp.complex128)
+            fft = cx_fft.fft
+            ifft = cx_fft.ifft
+        else:
+            fft = np.fft.fft
+            ifft = np.fft.ifft
         # This if statement can not be method, for performance.
         if (not reuse_wavelets) or (self.fft_wavelets is None):
             if self.cuda:
                 remake_plan = True
-            if self.cache_limit == 1:
-                if self.fft_wavelets is None:
-                    self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
-                    self._to_ifft = ncp.zeros_like(self.fft_wavelets, dtype=ncp.complex)
-                    sid = ''.join((str(wave_shape), str(id(freqs))))
-                    self._kept_fft.update({sid: self.fft_wavelets})
-                    self.cache_num += 1
+            if self.cache_limit == 1 and self.fft_wavelets is None:
+                self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
+                sid = ''.join((str(wave_shape), str(id(freqs))))
+                self._kept_fft.update({sid: self.fft_wavelets})
+                self.cache_num += 1
             else:
                 sid = ''.join((str(wave_shape), str(id(freqs))))
                 if sid in self._kept_fft.keys():
                     self.fft_wavelets = self._kept_fft[sid]
                 else:
+                    if self.cache_num == self.cache_limit:
+                        if len(self._kept_fft.keys())!=0:
+                            del self._kept_fft[list(self._kept_fft.keys())[0]]
+                            self.cache_num-=1
                     self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
-                    self._to_ifft = ncp.zeros_like(self.fft_wavelets, dtype=complex)
                     if((self.cache_limit is None) or
                        self.cache_limit > self.cache_num):
                         self._kept_fft.update({sid: self.fft_wavelets})
                         self.cache_num += 1
-        # logger.info('Applying FFT mul.')
-        # This 7 lines makes this fast a little.
-        if dimension == 2:
-            return ncp.fft.ifft(
-                self.fft_wavelets *
-                ncp.fft.fft(wave).reshape(
-                    wave.shape[0], 1, wave.shape[-1]))
-        if self.cuda and dimension == 1:
-            if remake_plan:
-                self._fft_plan = cx_fft.get_fft_plan(wave, axes=(0,))
-            ncp.multiply(self.fft_wavelets,
-                         cx_fft.fft(wave, plan=self._fft_plan),
-                         out=self._to_ifft)
-            if remake_plan:
-                self._ifft_plan = cx_fft.get_fft_plan(self._to_ifft, axes=(1,))
-            if self.cache_limit == 0:
-                self.fft_wavelets = None
-                self._kept_fft = {}
-            return cx_fft.ifft(self._to_ifft, plan=self._ifft_plan)
-        else:
-            ncp.multiply(self.fft_wavelets,
-                         ncp.fft.fft(wave),
-                         out=self._to_ifft)
-            return ncp.fft.ifft(self._to_ifft)
+        if dimension >= 2:
+            shape = wave.shape
+            return ifft(
+                np.multiply(self.fft_wavelets,
+                fft(wave).reshape(
+                    reduce(mul, wave.shape[:-1]),1, wave.shape[-1])))\
+                .reshape(wave.shape[:-1]+self.fft_wavelets.shape)
+        return ifft(ncp.multiply(self.fft_wavelets, fft(wave)))
 
     def fourier_cwt(self, wave: Array, freqs: Numbers,
                     reuse_wavelets: bool = True,
@@ -628,14 +618,9 @@ class WaveletMultiplier(WaveletsContainer):
                 if ((self.cache_limit is None) or
                         self.cache_limit > len(self._kept_fft)):
                     self._kept_fft.update({sid: self.fft_wavelets})
-        ncp = cp if self.cuda else np
+        ifft = cx_fft.ifft if self.cuda else np.fft.ifft
         logger.info('Applying FFT mul.')
-        # This 4 lines makes this fast a little.
-        # if self.cuda:
-        #     if remake_plan:
-        #         self._ifft_plan = cx_fft.get_fft_plan(wave, axes=(1,))
-        #     return cx_fft.ifft(wave, plan=self._ifft_plan)
-        return ncp.fft.ifft(self.fft_wavelets * wave)
+        return ifft(self.fft_wavelets * wave)
 
 
 class WaveletBase(WaveletConvolver, WaveletMultiplier):
@@ -732,7 +717,10 @@ Converting to numpy is too slow. Exit.''')
         '''
         logger.info('Calculating power.')
         ncp = cp if self.cuda else np
-        return ncp.square(self.abs(wave, freqs, logger, padding))
+        result = self.abs(wave, freqs, logger, padding)
+        ncp.square(result, out=result)
+        return result
+            
 
     def abs(self, wave: Array, freqs: Array,
             logger: Logger = logger,
@@ -754,7 +742,8 @@ Converting to numpy is too slow. Exit.''')
         '''
         logger.info('Calculating absolute.')
         ncp = cp if self.cuda else np
-        return ncp.abs(self.cwt(wave, freqs, logger, padding))
+        result = ncp.abs(self.cwt(wave, freqs, logger, padding))
+        return result
 
     def clear_cache(self) -> 'WaveletBase':
         '''
