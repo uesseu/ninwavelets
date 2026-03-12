@@ -94,17 +94,37 @@ If cupy could not be imported, it does not raise error but reports it.
 
 ```python
 import cupy as cp
-from ninwavelets import Morse
-freqs = cp.array(20, 100, 1)
+from ninwavelets import Morse, warmup
+warmup() # I recommend warmingup. It makes ninwavelets faster.
+freqs = cp.array(20, 100, 1)  # Target frequency
 
 wave = cp.sin(cp.arange(0, 1000, 1))
-morse = Morse(1000)
+morse = Morse(1000)  # Sampling frequency
 morse.cwt(wave, freqs)
-# morse.cwt(wave, cp.arange(20, 100, 1))   may be little bit slow!
+# morse.cwt(wave, cp.arange(20, 100, 1)) may be little bit slow!
 
 # 2 dimension wave can be converted!
 morse.cwt(np.array([wave for n in range(10)], freqs)
 ```
+
+# Parallel computing
+Ninwavelets supports GPGPU and multi-threading. Multi-processing is slower than multi-threading and slower than single-thread in some cases. However, multi-threading requires thread-safe programming.
+
+```python
+import cupy as cp
+from concurrent.futures import ThreadPoolExecutor
+from ninwavelets import Morse
+
+freqs = cp.array(20, 100, 1)  # Target frequency
+
+def wavelet_calc(x):
+    return Morse(1000).cwt(x, freqs)
+    
+waves = [cp.sin(cp.arange(0, 1000, 1)) for n in range(2)]
+with ThreadPoolExecutor as th:
+    th.map(wavelet_calc, waves)
+```
+
 
 # Purpose and background
 At first, this package was written to perform GMW on mne python.  
@@ -113,10 +133,10 @@ Calculating no purpose is guilt! Now it has own CWT method.
 And I noticed, it may be good for Morlet Wavelet too.  
 The result resembles that of mne python.  
 
-This is a brand new project, and under heavily development(Mainly on my Sunday).  
+This is a brand new project, and under heavily development(Mainly on Sunday).  
 Destructive changes may be made.  
 
-# Exsamples
+# Examples
 GMW is similar to morlet wavelet, if you use default param.  
 You can calculate complex value, abosolute value and power.  
 

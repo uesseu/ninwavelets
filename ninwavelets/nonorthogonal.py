@@ -1,5 +1,5 @@
 from .base import WaveletBase, CWTMode, WaveletFormula
-from typing import Union, List, cast, Optional
+from typing import Union, List, cast, Optional, Callable
 import numpy as np
 try:
     import cupy as cp
@@ -7,6 +7,7 @@ except ImportError as error:
     cp = np
     print(error)
     print('Cupy could not be loaded.')
+Array = Union[np.ndarray, cp.ndarray]
 
 
 class MorseFormula(WaveletFormula):
@@ -86,7 +87,7 @@ class Morse(WaveletBase):
 
 
 class MorletFormula(WaveletFormula):
-    def __init__(self, sigma: float = 7.,
+    def __init__(self, sigma: float | int | Callable = 7.,
                  gabor: bool = False) -> None:
         self.sigma = sigma
         self.c = np.float_power(1
@@ -107,12 +108,18 @@ class MorletFormula(WaveletFormula):
         else:
             return self.a * (cp.exp(-cp.square(self.sigma-freqs) / 2) - pl)
 
-    def trans_formula(self, freqs: np.ndarray, freq: float = 1) -> np.ndarray:
-        peak_freq = self.sigma / (1. - np.exp(-self.sigma * freq))
+    def trans_formula(self, freqs: np.ndarray,
+                      freq: [Array, float] = 1) -> np.ndarray:
+        if isinstance(self.sigma, Array) and isinstance(freq, Array):
+            sigma = np.tile(self.sigma, freq.shape[-1])\
+                .reshape(freq.shape[-1], freqs.shape[0]).transpose(1, 0)
+        else:
+            sigma = self.sigma
+        peak_freq = sigma / (1. - np.exp(-sigma * freq))
         frq = freq / peak_freq
         freqs /= frq
         pl = 0 if self.k == 0 else self.k * np.exp(-np.square(freqs) / 2)
-        return self.a * (np.exp(-np.square(self.sigma-freqs) / 2) - pl)
+        return self.a * (np.exp(-np.square(sigma-freqs) / 2) - pl)
 
     def cp_formula(self, timeline: cp.ndarray, freq: float = 1) -> np.ndarray:
         return (self.c * (cp.pi ** (-1 / 4))

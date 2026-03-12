@@ -8,7 +8,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from functools import reduce
 from operator import mul
 from logging import getLogger, NullHandler, Logger
-from portclang import factor
+from .portclang import factor
+from threading import Lock
 
 logger = getLogger('ninwavelets')
 logger.addHandler(NullHandler())
@@ -17,8 +18,6 @@ try:
     import cupy as cp
     import cupyx.scipy.fftpack as cx_fft
     # This is warming up for cupy.
-    cp.fft.fft(cp.arange(1, 10, 1))
-    cp.fft.ifft(cp.arange(1, 10, 1))
 except ImportError as error:
     print(error)
     print('Cupy could not be loaded.')
@@ -26,6 +25,15 @@ except ImportError as error:
 except BaseException as error:
     print('Cuda could not imported!')
     print(error)
+
+def warmup():
+    print('Warming up! It takes a little, but makes wavelet transform faster.')
+    import time
+    t = time.time()
+    cp.fft.fft(cp.arange(1, 10, 1))
+    cp.fft.ifft(cp.arange(1, 10, 1))
+    print(f'Warming up took {time.time() - t} seconds!')
+
 
 Numbers = Union[List[float], np.ndarray, range]
 Array = Union[np.ndarray, cp.ndarray]
@@ -91,6 +99,7 @@ class Baseline:
     '''
     def __init__(self, wave: Array, sfreq: float,
                  start: float, stop: float, dim: int = 1) -> None:
+        self.done = False
         self.wave = wave
         shape = reduce(mul, wave.shape)
         self.baseline = wave.reshape(shape)[int(start * sfreq):
@@ -532,7 +541,7 @@ class WaveletMultiplier(WaveletsContainer):
 
     def _cwt_fft(self, wave: Array, freqs: Numbers,
                  reuse_wavelets: bool = True, logger: Logger = logger,
-                 padding: bool = False) -> Array:
+                 padding: bool = False, from_fourier: bool = False) -> Array:
         '''cwt
         Run CWT based on fft.
 
@@ -555,7 +564,6 @@ class WaveletMultiplier(WaveletsContainer):
         '''
         dimension: int = len(wave.shape)
         wave_shape: tuple = wave.shape
-        remake_plan = False
         ncp = cp if self.cuda else np
         if self.cuda:
             wave = wave.astype(cp.complex128)
@@ -566,8 +574,6 @@ class WaveletMultiplier(WaveletsContainer):
             ifft = np.fft.ifft
         # This if statement can not be method, for performance.
         if (not reuse_wavelets) or (self.fft_wavelets is None):
-            if self.cuda:
-                remake_plan = True
             if self.cache_limit == 1 and self.fft_wavelets is None:
                 self.make_fft_wavelets(freqs, wave_shape[-1] / self.sfreq)
                 sid = ''.join((str(wave_shape), str(id(freqs))))
@@ -587,14 +593,18 @@ class WaveletMultiplier(WaveletsContainer):
                        self.cache_limit > self.cache_num):
                         self._kept_fft.update({sid: self.fft_wavelets})
                         self.cache_num += 1
+        fft_wave = fft(wave) if not from_fourier else wave
         if dimension >= 2:
             shape = wave.shape
             return ifft(
                 np.multiply(self.fft_wavelets,
-                fft(wave).reshape(
+                fft_wave.reshape(
                     reduce(mul, wave.shape[:-1]),1, wave.shape[-1])))\
                 .reshape(wave.shape[:-1]+self.fft_wavelets.shape)
-        return ifft(ncp.multiply(self.fft_wavelets, fft(wave)))
+        while True:
+            if fft_wave.shape[-1] == self.fft_wavelets.shape[-1]:
+                break
+        return ifft(ncp.multiply(self.fft_wavelets, fft_wave))
 
     def fourier_cwt(self, wave: Array, freqs: Numbers,
                     reuse_wavelets: bool = True,
@@ -602,19 +612,16 @@ class WaveletMultiplier(WaveletsContainer):
         """
         CWT for wave which is already fourier transformed.
         """
-        remake_plan: bool = False
         self.wave_length = wave.shape[0]
         if self.cuda:
-            wave = wave.astype(cp.complex)
+            wave = wave.astype(cp.complexfloating)
         # This if statement can not be method, for performance.
         if (not reuse_wavelets) or (self.fft_wavelets is None):
-            if self.cuda:
-                remake_plan = True
             sid = ''.join((str(wave.shape), str(id(freqs))))
             if sid in self._kept_fft.keys():
                 self.fft_wavelets = self._kept_fft[sid]
             else:
-                self.make_fft_wavelets(freqs, wave.shape[0] / self.sfreq)
+                self.make_fft_wavelets(freqs, wave.shape[-1] / self.sfreq)
                 if ((self.cache_limit is None) or
                         self.cache_limit > len(self._kept_fft)):
                     self._kept_fft.update({sid: self.fft_wavelets})
@@ -645,6 +652,7 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
 
     def cwt(self, wave: Array, freqs: Union[Numbers, None],
             logger: Logger = logger, padding: bool = True,
+            from_fourier: bool = False
             ) -> Array:
         '''Perform CWT
 
@@ -682,7 +690,7 @@ class WaveletBase(WaveletConvolver, WaveletMultiplier):
                 wave = self.wave
             # wave = ncp.pad(wave, (0, self.wave_length - wave.shape[-1]))
             result = self._cwt_fft(
-                wave, freqs, reuse_wavelets, logger, padding)
+                wave, freqs, reuse_wavelets, logger, padding, from_fourier)
             return result[..., :original_wave_length] if padding else result
         if self.cuda:
             logger.warn('''

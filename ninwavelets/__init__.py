@@ -4,6 +4,6 @@
 
 from .portclang import factor
 from .base import (WaveletBase, CWTMode, plot_tf, Baseline, np2cp,
-                   WaveletFormula)
+                   WaveletFormula, warmup)
 from .nonorthogonal import Morse, Morlet, MexicanHat, Shannon
 from .orthogonal import DaubechiesWavelet, daubechies_mra

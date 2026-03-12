@@ -62,11 +62,11 @@ def hanning_window(sfreq: int, hanning_ratio: float = 0.50,
         return x
 
 
-def nin_window(wave: np.ndarray, length: int,
-               cuda: bool = False,
-               mode: str = 'mul') -> np.ndarray:
+def nt_window(wave: np.ndarray, length: int,
+              cuda: bool = False,
+              mode: str = 'mul') -> np.ndarray:
     """
-    Nin window is original experimental window.
+    NT window is original experimental window.
     This is tukey window with padding.
     This window does not change raw wave.
     However, this adds edge of length and you should cut after transform.
@@ -85,6 +85,32 @@ def nin_window(wave: np.ndarray, length: int,
     window = np.hstack((start, np.ones(wave.shape[0]), np.flip(start)))
     wave = ncp.pad(wave, length, 'edge')
     return wave * window
+
+
+def nin_window(length: int, ratio: float, cuda: bool = False) -> np.ndarray:
+    """
+    Nin window is original experimental window.
+    This is cos wave based window.
+    This window changes edge by square of cos wave.
+    And so, it can be added to wave recorded.
+
+    wave: Array
+        wave to apply window.
+    length: int
+        length of edge to pad.
+    cuda: bool
+        use cuda or not.
+    """
+    ncp = cp if cuda else np
+    edge = ncp.square(
+        ncp.cos(
+            ncp.arange(0, 1, 1 / length / ratio) * np.pi / 2
+        )
+    )
+    wave = np.ones(length)
+    wave[:edge.shape[-1]] = ncp.flip(edge)
+    wave[wave.shape[-1] - edge.shape[-1]:] = edge
+    return wave
 
 
 if __name__ == '__main__':
